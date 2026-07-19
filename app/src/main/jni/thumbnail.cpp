@@ -49,8 +49,8 @@ static inline mpv_node make_node_str(const char *s)
 
 jni_func(jobject, grabThumbnail, jint dimension) {
     auto total_start = std::chrono::high_resolution_clock::now();
-    CHECK_MPV_INIT();
-    init_methods_cache(env);
+    if (!check_mpv_initialized() || !init_methods_cache(env))
+        return NULL;
 
     mpv_node result{};
     {
@@ -302,7 +302,8 @@ jni_func(void, clearThumbnailCache) {
 
 // Convert AVFrame to Android Bitmap
 static jobject frame_to_bitmap(JNIEnv *env, AVFrame *frame, int target_dimension) {
-    init_methods_cache(env);
+    if (!init_methods_cache(env))
+        return NULL;
     
     // Calculate scaled dimensions while preserving aspect ratio
     int width = frame->width;
@@ -423,7 +424,8 @@ static AVFrame *get_scalable_frame(AVFrame *frame) {
 
 static jobject grab_thumbnail_fast_impl(JNIEnv *env, const char *path, double position, int dimension, bool use_hw_dec) {
     auto total_start = std::chrono::high_resolution_clock::now();
-    init_methods_cache(env);
+    if (!init_methods_cache(env))
+        return NULL;
 
     // Validate parameters
     if (dimension <= 0 || dimension > 4096) {
@@ -655,7 +657,8 @@ static jobject grab_thumbnail_fast_impl(JNIEnv *env, const char *path, double po
 }
 
 jni_func(jobject, grabThumbnailFast, jstring jpath, jdouble position, jint dimension, jboolean use_hw_dec) {
-    init_methods_cache(env);
+    if (!init_methods_cache(env))
+        return NULL;
 
     if (!jpath) {
         ALOGE("Thumbnail | Invalid path");

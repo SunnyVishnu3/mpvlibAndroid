@@ -6,7 +6,7 @@
 #define jni_func(return_type, name, ...) JNIEXPORT return_type JNICALL jni_func_name(name) (JNIEnv *env, jobject obj, ##__VA_ARGS__)
 
 bool acquire_jni_env(JavaVM *vm, JNIEnv **env);
-void init_methods_cache(JNIEnv *env);
+bool init_methods_cache(JNIEnv *env);
 
 #ifndef UTIL_EXTERN
 #define UTIL_EXTERN extern
@@ -28,13 +28,16 @@ UTIL_EXTERN jmethodID mpv_MPVLib_eventProperty_S,
 	mpv_MPVLib_eventProperty_SS,
 	mpv_MPVLib_eventProperty_SN,
 	mpv_MPVLib_event,
+	mpv_MPVLib_eventEndFile_iiSN,
 	mpv_MPVLib_logMessage_SiS;
 
 UTIL_EXTERN jclass mpv_MPVNode_None, mpv_MPVNode_StringNode, mpv_MPVNode_BooleanNode,
-	mpv_MPVNode_IntNode, mpv_MPVNode_DoubleNode, mpv_MPVNode_ArrayNode, mpv_MPVNode_MapNode, mpv_MPVNode;
+	mpv_MPVNode_IntNode, mpv_MPVNode_DoubleNode, mpv_MPVNode_ByteArrayNode,
+	mpv_MPVNode_ArrayNode, mpv_MPVNode_MapNode, mpv_MPVNode;
 UTIL_EXTERN jfieldID mpv_MPVNode_None_INSTANCE;
 UTIL_EXTERN jmethodID mpv_MPVNode_StringNode_init, mpv_MPVNode_BooleanNode_init,
 	mpv_MPVNode_IntNode_init, mpv_MPVNode_DoubleNode_init,
+	mpv_MPVNode_ByteArrayNode_init,
 	mpv_MPVNode_ArrayNode_init, mpv_MPVNode_MapNode_init;
 
 UTIL_EXTERN jclass java_util_ArrayList, java_util_HashMap;

@@ -1,4 +1,5 @@
 #include <jni.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <mpv/client.h>
@@ -15,7 +16,12 @@ jobject mpv_node_to_jobject(JNIEnv *env, const mpv_node *node) {
         }
         case MPV_FORMAT_STRING: {
             jstring jstr = env->NewStringUTF(node->u.string);
-            return env->NewObject(mpv_MPVNode_StringNode, mpv_MPVNode_StringNode_init, jstr);
+            if (!jstr)
+                return NULL;
+            jobject result = env->NewObject(mpv_MPVNode_StringNode,
+                                            mpv_MPVNode_StringNode_init, jstr);
+            env->DeleteLocalRef(jstr);
+            return result;
         }
         case MPV_FORMAT_FLAG: {
             return env->NewObject(mpv_MPVNode_BooleanNode, mpv_MPVNode_BooleanNode_init, (jboolean)node->u.flag);
@@ -26,6 +32,22 @@ jobject mpv_node_to_jobject(JNIEnv *env, const mpv_node *node) {
         case MPV_FORMAT_DOUBLE: {
             return env->NewObject(mpv_MPVNode_DoubleNode, mpv_MPVNode_DoubleNode_init, (jdouble)node->u.double_);
         }
+        case MPV_FORMAT_BYTE_ARRAY: {
+            if (!node->u.ba || node->u.ba->size > static_cast<size_t>(INT32_MAX) ||
+                    (node->u.ba->size > 0 && !node->u.ba->data))
+                return NULL;
+            jbyteArray bytes = env->NewByteArray(static_cast<jsize>(node->u.ba->size));
+            if (!bytes)
+                return NULL;
+            if (node->u.ba->size > 0) {
+                env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(node->u.ba->size),
+                    reinterpret_cast<const jbyte *>(node->u.ba->data));
+            }
+            jobject result = env->NewObject(mpv_MPVNode_ByteArrayNode,
+                                            mpv_MPVNode_ByteArrayNode_init, bytes);
+            env->DeleteLocalRef(bytes);
+            return result;
+        }
         case MPV_FORMAT_NODE_ARRAY: {
             jobjectArray nodeArray = env->NewObjectArray(node->u.list->num, mpv_MPVNode, NULL);
             for (int i = 0; i < node->u.list->num; i++) {
@@ -35,16 +57,30 @@ jobject mpv_node_to_jobject(JNIEnv *env, const mpv_node *node) {
                     env->DeleteLocalRef(childNode);
                 }
             }
-            return env->NewObject(mpv_MPVNode_ArrayNode, mpv_MPVNode_ArrayNode_init, nodeArray);
+            jobject result = env->NewObject(mpv_MPVNode_ArrayNode,
+                                            mpv_MPVNode_ArrayNode_init, nodeArray);
+            env->DeleteLocalRef(nodeArray);
+            return result;
         }
         case MPV_FORMAT_NODE_MAP: {
             jobject hashMap = env->NewObject(java_util_HashMap, java_util_HashMap_init);
             for (int i = 0; i < node->u.list->num; i++) {
                 jstring key = env->NewStringUTF(node->u.list->keys[i]);
                 jobject childNode = mpv_node_to_jobject(env, &node->u.list->values[i]);
-                if (childNode) env->CallObjectMethod(hashMap, java_util_HashMap_put, key, childNode);
+                if (childNode) {
+                    jobject previous = env->CallObjectMethod(hashMap, java_util_HashMap_put,
+                                                             key, childNode);
+                    if (previous)
+                        env->DeleteLocalRef(previous);
+                    env->DeleteLocalRef(childNode);
+                }
+                if (key)
+                    env->DeleteLocalRef(key);
             }
-            return env->NewObject(mpv_MPVNode_MapNode, mpv_MPVNode_MapNode_init, hashMap);
+            jobject result = env->NewObject(mpv_MPVNode_MapNode,
+                                            mpv_MPVNode_MapNode_init, hashMap);
+            env->DeleteLocalRef(hashMap);
+            return result;
         }
         default:
             return NULL;
@@ -54,8 +90,6 @@ jobject mpv_node_to_jobject(JNIEnv *env, const mpv_node *node) {
 // recursively adding all nodes for map and arrays
 int jobject_to_mpv_node(JNIEnv *env, jobject jnode, mpv_node *node) {
     if (!jnode || !node) return -1;
-
-    jclass nodeClass = env->GetObjectClass(jnode);
 
     if (env->IsInstanceOf(jnode, mpv_MPVNode_None)) {
         node->format = MPV_FORMAT_NONE;
@@ -74,6 +108,8 @@ int jobject_to_mpv_node(JNIEnv *env, jobject jnode, mpv_node *node) {
             node->format = MPV_FORMAT_STRING;
             node->u.string = strdup("");
         }
+        if (jstr)
+            env->DeleteLocalRef(jstr);
         return 0;
     }
 
@@ -101,6 +137,41 @@ int jobject_to_mpv_node(JNIEnv *env, jobject jnode, mpv_node *node) {
         return 0;
     }
 
+    if (env->IsInstanceOf(jnode, mpv_MPVNode_ByteArrayNode)) {
+        jfieldID valueField = env->GetFieldID(mpv_MPVNode_ByteArrayNode, "value", "[B");
+        jbyteArray bytes = reinterpret_cast<jbyteArray>(env->GetObjectField(jnode, valueField));
+        if (!bytes)
+            return -1;
+        jsize size = env->GetArrayLength(bytes);
+        node->u.ba = static_cast<mpv_byte_array *>(calloc(1, sizeof(mpv_byte_array)));
+        if (!node->u.ba) {
+            env->DeleteLocalRef(bytes);
+            return -1;
+        }
+        node->u.ba->size = size;
+        if (size > 0) {
+            node->u.ba->data = malloc(size);
+            if (!node->u.ba->data) {
+                free(node->u.ba);
+                node->u.ba = NULL;
+                env->DeleteLocalRef(bytes);
+                return -1;
+            }
+            env->GetByteArrayRegion(bytes, 0, size,
+                static_cast<jbyte *>(node->u.ba->data));
+            if (env->ExceptionCheck()) {
+                free(node->u.ba->data);
+                free(node->u.ba);
+                node->u.ba = NULL;
+                env->DeleteLocalRef(bytes);
+                return -1;
+            }
+        }
+        env->DeleteLocalRef(bytes);
+        node->format = MPV_FORMAT_BYTE_ARRAY;
+        return 0;
+    }
+
     if (env->IsInstanceOf(jnode, mpv_MPVNode_ArrayNode)) {
         jfieldID valueField = env->GetFieldID(mpv_MPVNode_ArrayNode, "value", "[Lis/xyz/mpv/MPVNode;");
         jobjectArray jarray = (jobjectArray)env->GetObjectField(jnode, valueField);
@@ -121,6 +192,7 @@ int jobject_to_mpv_node(JNIEnv *env, jobject jnode, mpv_node *node) {
                     env->DeleteLocalRef(childNode);
                 }
             }
+            env->DeleteLocalRef(jarray);
         } else {
             node->format = MPV_FORMAT_NODE_ARRAY;
             node->u.list = (mpv_node_list*)malloc(sizeof(mpv_node_list));
@@ -167,6 +239,7 @@ int jobject_to_mpv_node(JNIEnv *env, jobject jnode, mpv_node *node) {
                         const char *key = env->GetStringUTFChars(keyStr, NULL);
                         node->u.list->keys[i] = strdup(key);
                         env->ReleaseStringUTFChars(keyStr, key);
+                        env->DeleteLocalRef(keyStr);
                     }
 
                     if (valueObj) {
@@ -175,11 +248,15 @@ int jobject_to_mpv_node(JNIEnv *env, jobject jnode, mpv_node *node) {
                     }
 
                     env->DeleteLocalRef(entry);
+                    env->DeleteLocalRef(entryClass);
                 }
             }
 
             env->DeleteLocalRef(entryArray);
             env->DeleteLocalRef(entrySet);
+            env->DeleteLocalRef(setClass);
+            env->DeleteLocalRef(mapClass);
+            env->DeleteLocalRef(jmap);
         } else {
             node->format = MPV_FORMAT_NODE_MAP;
             node->u.list = (mpv_node_list*)malloc(sizeof(mpv_node_list));
@@ -201,6 +278,13 @@ void free_mpv_node(mpv_node *node) {
             if (node->u.string) {
                 free(node->u.string);
                 node->u.string = NULL;
+            }
+            break;
+        case MPV_FORMAT_BYTE_ARRAY:
+            if (node->u.ba) {
+                free(node->u.ba->data);
+                free(node->u.ba);
+                node->u.ba = NULL;
             }
             break;
         case MPV_FORMAT_NODE_ARRAY:
