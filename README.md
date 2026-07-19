@@ -33,7 +33,15 @@ This library brings the full power of mpv to Android — play any video, generat
 - Vulkan rendering via libplacebo + shaderc
 - GPU shader cache support
 - Subtitle rendering with libass + HarfBuzz + FriBidi
+- Legacy subtitle encoding detection with uchardet + libiconv
 - AV1 decoding via dav1d
+
+### Media and Audio Extensions
+- Blu-ray folder and unencrypted disc support through libbluray
+- DVD navigation for unencrypted DVD structures through libdvdnav/libdvdread
+- ZIP, 7z, TAR, and other archive input through libarchive
+- High-quality pitch-preserving time stretching through Rubber Band
+- FFmpeg lavfi compressor, limiter, equalizer, pan, silence removal, stereo, and volume filters
 
 ### ⚡ Modern Android API
 - Kotlin-friendly with StateFlow / Flow support
@@ -146,12 +154,26 @@ Utils.VERSIONS.dependencies.forEach { (name, version) ->
 | FreeType | 2.14.3 |
 | FriBidi | 1.0.16 |
 | libunibreak | 7.0 |
+| libbluray | 1.4.1 |
+| libiconv | 1.19 |
+| uchardet | 0.0.8 |
+| bzip2 | 1.0.8 |
+| xz | 5.8.1 |
+| zstd | 1.5.7 |
+| libarchive | 3.8.7 |
+| libdvdread | 7.0.1 |
+| libdvdnav | 7.0.0 |
+| Rubber Band | 4.0.0 |
 | Android NDK | r29 |
 | Min API | 24 (Android 7.0) |
 
 ## License
 
-**MIT License** — See [LICENSE](LICENSE).
+The original Kotlin/JNI code is available under the [MIT License](LICENSE).
+Bundled native components retain their own licenses, including GPL and LGPL
+components. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Distributors
+of the compiled AAR are responsible for satisfying all corresponding source,
+notice, and relinking obligations.
 
 ## Credits
 

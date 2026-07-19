@@ -5,6 +5,7 @@ cd "$( dirname "${BASH_SOURCE[0]}" )"
 
 cleanbuild=0
 nodeps=0
+onlydeps=0
 clang=1
 target=mpv-android
 arch=armv7l
@@ -14,11 +15,23 @@ getdeps () {
 	echo ${!varname}
 }
 
+wasbuilt () {
+	# Keep compatibility with the Bash 3 shipped by older macOS releases.
+	varname="built_${1//-/_}"
+	return "${!varname:-1}"
+}
+
+markbuilt () {
+	varname="built_${1//-/_}"
+	declare -g "$varname=0"
+}
+
 loadarch () {
 	unset CC CXX CPATH LIBRARY_PATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH
 	unset CFLAGS CXXFLAGS CPPFLAGS LDFLAGS
 
 	local apilvl=24
+	export android_api=$apilvl
 
 	if [ "$1" == "armv7l" ]; then
 		export ndk_suffix=
@@ -116,6 +129,7 @@ build () {
 		printf >&2 '\e[1;31m%s\e[m\n' "Target $1 not found"
 		return 1
 	fi
+	wasbuilt "$1" && return 0
 	if [ $nodeps -eq 0 ]; then
 		printf >&2 '\e[1;34m%s\e[m\n' "Preparing $1..."
 		local deps=$(getdeps $1)
@@ -135,6 +149,7 @@ build () {
 	[ $cleanbuild -eq 1 ] && $BUILDSCRIPT clean
 	$BUILDSCRIPT build
 	popd
+	markbuilt "$1"
 }
 
 usage () {
@@ -142,6 +157,7 @@ usage () {
 		"Usage: buildall.sh [options] [target]" \
 		"Builds the specified target (default: $target)" \
 		"-n             Do not build dependencies" \
+		"--only-deps    Build only dependencies of the specified target" \
 		"--clean        Clean build dirs before compiling" \
 		"--gcc          Use gcc compiler (unsupported!)" \
 		"--arch <arch>  Build for specified architecture (default: $arch; supported: armv7l, arm64, x86, x86_64)"
@@ -155,6 +171,9 @@ while [ $# -gt 0 ]; do
 		;;
 		-n|--no-deps)
 		nodeps=1
+		;;
+		--only-deps)
+		onlydeps=1
 		;;
 		--gcc)
 		clang=0
@@ -179,9 +198,16 @@ done
 
 loadarch $arch
 setup_prefix
-build $target
+if [ $onlydeps -eq 1 ]; then
+	deps=$(getdeps $target)
+	for dep in $deps; do
+		build $dep
+	done
+else
+	build $target
+fi
 
-[ "$target" == "mpv-android" ] && \
+[ $onlydeps -eq 0 ] && [ "$target" == "mpv-android" ] && \
 	ls -lh ../app/build/outputs/aar/*.aar
 
 exit 0

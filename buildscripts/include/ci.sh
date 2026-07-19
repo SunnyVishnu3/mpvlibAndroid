@@ -47,10 +47,7 @@ build_prefix() {
 	# Build everything mpv depends on for every packaged ABI, but not mpv itself.
 	for arch in "${ci_build_arches[@]}"; do
 		msg "Building dependency prefix for $arch"
-		for x in ${dep_mpv[@]}; do
-			msg "Building $x for $arch"
-			./buildall.sh --arch "$arch" "$x"
-		done
+		./buildall.sh --arch "$arch" --only-deps mpv
 	done
 
 	if [[ "$CACHE_MODE" == folder && -w "$CACHE_FOLDER" ]]; then
