@@ -4,6 +4,14 @@
 #include <jni.h>
 #include <mutex>
 
+extern "C" {
+#include <libavcodec/jni.h>
+}
+
+static std::mutex android_jni_mutex;
+static JavaVM *android_jni_vm;
+static jobject android_app_context;
+
 bool acquire_jni_env(JavaVM *vm, JNIEnv **env)
 {
     int ret = vm->GetEnv((void**) env, JNI_VERSION_1_6);
@@ -26,6 +34,57 @@ static bool cache_global_class(JNIEnv *env, jclass *cached_class, const char *na
     *cached_class = reinterpret_cast<jclass>(env->NewGlobalRef(local_class));
     env->DeleteLocalRef(local_class);
     return *cached_class != NULL;
+}
+
+bool init_android_jni_environment(JNIEnv *env, jobject appctx, JavaVM **vm)
+{
+    if (!env || !appctx || !vm)
+        return false;
+
+    JavaVM *next_vm = NULL;
+    if (env->GetJavaVM(&next_vm) != JNI_OK || !next_vm)
+        return false;
+
+    std::lock_guard<std::mutex> lock(android_jni_mutex);
+    if (android_jni_vm && android_jni_vm != next_vm)
+        return false;
+    if (!android_jni_vm) {
+        if (av_jni_set_java_vm(next_vm, NULL) < 0)
+            return false;
+        android_jni_vm = next_vm;
+    }
+
+    if (!android_app_context) {
+        jclass context_class = env->GetObjectClass(appctx);
+        jmethodID get_application_context = context_class ? env->GetMethodID(
+            context_class, "getApplicationContext", "()Landroid/content/Context;") : NULL;
+        jobject application_context = get_application_context ? env->CallObjectMethod(
+            appctx, get_application_context) : NULL;
+        if (context_class)
+            env->DeleteLocalRef(context_class);
+        if (!get_application_context || env->ExceptionCheck()) {
+            if (application_context)
+                env->DeleteLocalRef(application_context);
+            return false;
+        }
+
+        jobject context_to_retain = application_context ? application_context : appctx;
+        jobject next_context = env->NewGlobalRef(context_to_retain);
+        if (application_context)
+            env->DeleteLocalRef(application_context);
+        if (!next_context)
+            return false;
+        if (av_jni_set_android_app_ctx(next_context, NULL) < 0) {
+            env->DeleteGlobalRef(next_context);
+            return false;
+        }
+        // FFmpeg stores this reference without cloning it, so retain it for the
+        // process lifetime instead of racing player and thumbnail operations.
+        android_app_context = next_context;
+    }
+
+    *vm = android_jni_vm;
+    return true;
 }
 
 static bool cache_method(JNIEnv *env, jmethodID *cached_method, jclass clazz,
@@ -62,6 +121,7 @@ bool init_methods_cache(JNIEnv *env)
         return true;
 
     bool success =
+        cache_global_class(env, &java_String, "java/lang/String") &&
         cache_global_class(env, &java_Integer, "java/lang/Integer") &&
         cache_method(env, &java_Integer_init, java_Integer, "<init>", "(I)V") &&
         cache_global_class(env, &java_Double, "java/lang/Double") &&

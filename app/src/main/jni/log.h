@@ -2,6 +2,7 @@
 
 #include <android/log.h>
 #include <jni.h>
+#include <mpv/client.h>
 
 #define DEBUG 1
 
@@ -19,3 +20,28 @@
 void throw_java_exception(JNIEnv *env, const char *msg);
 bool check_mpv_initialized();
 bool require_mpv_initialized(JNIEnv *env);
+
+class MpvHandleGuard {
+public:
+    MpvHandleGuard();
+    ~MpvHandleGuard();
+
+    MpvHandleGuard(const MpvHandleGuard &) = delete;
+    MpvHandleGuard &operator=(const MpvHandleGuard &) = delete;
+
+    explicit operator bool() const { return handle != NULL; }
+    mpv_handle *get() const { return handle; }
+
+private:
+    mpv_handle *handle;
+};
+
+bool begin_mpv_create();
+void finish_mpv_create(mpv_handle *handle);
+void cancel_mpv_create();
+mpv_handle *begin_mpv_init();
+void finish_mpv_init();
+mpv_handle *fail_mpv_init();
+mpv_handle *begin_mpv_destroy();
+void finish_mpv_destroy();
+void cancel_mpv_destroy();

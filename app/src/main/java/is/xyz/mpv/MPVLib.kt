@@ -2,6 +2,7 @@ package `is`.xyz.mpv
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.util.Log
 import android.view.Surface
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CoroutineScope
@@ -162,57 +163,67 @@ object MPVLib {
     private fun logObserverSnapshot(): List<LogObserver> =
         synchronized(log_observers) { log_observers.toList() }
 
+    private inline fun notifyEventObservers(callback: (EventObserver) -> Unit) {
+        for (observer in eventObserverSnapshot()) {
+            try {
+                callback(observer)
+            } catch (error: Throwable) {
+                Log.e(TAG, "Event observer callback failed", error)
+            }
+        }
+    }
+
     @JvmStatic
     fun eventProperty(property: String, value: Long) {
-        for (o in eventObserverSnapshot()) o.eventProperty(property, value)
+        notifyEventObservers { it.eventProperty(property, value) }
         propLong.emit(property, value)
         propInt.emit(property, value.toInt())
     }
 
     @JvmStatic
     fun eventProperty(property: String, value: Boolean) {
-        for (o in eventObserverSnapshot()) o.eventProperty(property, value)
+        notifyEventObservers { it.eventProperty(property, value) }
         propBoolean.emit(property, value)
     }
 
     @JvmStatic
     fun eventProperty(property: String, value: Double) {
-        for (o in eventObserverSnapshot()) o.eventProperty(property, value)
+        notifyEventObservers { it.eventProperty(property, value) }
         propDouble.emit(property, value)
         propFloat.emit(property, value.toFloat())
     }
 
     @JvmStatic
     fun eventProperty(property: String, value: String) {
-        for (o in eventObserverSnapshot()) o.eventProperty(property, value)
+        notifyEventObservers { it.eventProperty(property, value) }
         propString.emit(property, value)
     }
 
     @JvmStatic
     fun eventProperty(property: String, value: MPVNode) {
-        for (o in eventObserverSnapshot()) o.eventProperty(property, value)
+        notifyEventObservers { it.eventProperty(property, value) }
         propNode.emit(property, value)
     }
 
     @JvmStatic
     fun eventProperty(property: String) {
-        for (o in eventObserverSnapshot()) o.eventProperty(property)
+        notifyEventObservers { it.eventProperty(property) }
         eventPropertyFlow.tryEmit(property)
     }
 
     @JvmStatic
     fun event(eventId: Int, data: MPVNode) {
-        for (o in eventObserverSnapshot()) o.event(eventId, data)
+        notifyEventObservers { it.event(eventId, data) }
         eventFlow.tryEmit(eventId)
     }
 
     @JvmStatic
     fun eventEndFile(reason: Int, error: Int, errorString: String?, data: MPVNode) {
-        for (o in eventObserverSnapshot()) {
-            if (o is EndFileObserver)
-                o.eventEndFile(reason, error, errorString, data)
+        notifyEventObservers {
+            if (it is EndFileObserver)
+                it.eventEndFile(reason, error, errorString, data)
             else
-                o.event(MpvEvent.MPV_EVENT_END_FILE, data)
+                it.event(MpvEvent.MPV_EVENT_END_FILE, data)
         }
         eventFlow.tryEmit(MpvEvent.MPV_EVENT_END_FILE)
     }
@@ -236,7 +247,13 @@ object MPVLib {
 
     @JvmStatic
     fun logMessage(prefix: String, level: Int, text: String) {
-        for (o in logObserverSnapshot()) o.logMessage(prefix, level, text)
+        for (observer in logObserverSnapshot()) {
+            try {
+                observer.logMessage(prefix, level, text)
+            } catch (error: Throwable) {
+                Log.e(TAG, "Log observer callback failed", error)
+            }
+        }
         logFlow.tryEmit(Triple(prefix, level, text))
     }
 
@@ -339,4 +356,6 @@ object MPVLib {
         const val MPV_LOG_LEVEL_DEBUG: Int = 60
         const val MPV_LOG_LEVEL_TRACE: Int = 70
     }
+
+    private const val TAG = "MPVLib"
 }

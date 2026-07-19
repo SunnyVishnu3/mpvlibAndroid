@@ -1,4 +1,5 @@
 #include <jni.h>
+#include <mutex>
 
 #include <mpv/client.h>
 
@@ -14,10 +15,11 @@ extern "C" {
 };
 
 static jobject surface;
+static std::mutex surface_mutex;
 
-static bool set_wid(int64_t wid)
+static bool set_wid(mpv_handle *handle, int64_t wid)
 {
-    int result = mpv_set_option(g_mpv, "wid", MPV_FORMAT_INT64, &wid);
+    int result = mpv_set_option(handle, "wid", MPV_FORMAT_INT64, &wid);
     if (result < 0)
         ALOGE("mpv_set_option(wid) returned error %s", mpv_error_string(result));
     return result >= 0;
@@ -31,7 +33,7 @@ static void clear_surface(JNIEnv *env)
     surface = NULL;
 }
 
-static void update_surface(JNIEnv *env, jobject next)
+static void update_surface(JNIEnv *env, mpv_handle *handle, jobject next)
 {
     if (!next) {
         throw_java_exception(env, "invalid surface provided");
@@ -45,7 +47,7 @@ static void update_surface(JNIEnv *env, jobject next)
         return;
     }
     int64_t wid = reinterpret_cast<intptr_t>(next_surface);
-    if (!set_wid(wid)) {
+    if (!set_wid(handle, wid)) {
         env->DeleteGlobalRef(next_surface);
         return;
     }
@@ -54,25 +56,38 @@ static void update_surface(JNIEnv *env, jobject next)
 }
 
 jni_func(void, attachSurface, jobject surface_) {
-    if (!require_mpv_initialized(env))
+    MpvHandleGuard handle;
+    if (!handle) {
+        throw_java_exception(env, "libmpv is not initialized");
         return;
-    update_surface(env, surface_);
+    }
+    std::lock_guard<std::mutex> lock(surface_mutex);
+    update_surface(env, handle.get(), surface_);
 }
 
 jni_func(void, replaceSurface, jobject surface_) {
-    if (!require_mpv_initialized(env))
+    MpvHandleGuard handle;
+    if (!handle) {
+        throw_java_exception(env, "libmpv is not initialized");
         return;
-    update_surface(env, surface_);
+    }
+    std::lock_guard<std::mutex> lock(surface_mutex);
+    update_surface(env, handle.get(), surface_);
 }
 
 jni_func(void, detachSurface) {
-    if (!require_mpv_initialized(env))
+    MpvHandleGuard handle;
+    if (!handle) {
+        throw_java_exception(env, "libmpv is not initialized");
         return;
+    }
 
-    if (set_wid(0))
+    std::lock_guard<std::mutex> lock(surface_mutex);
+    if (set_wid(handle.get(), 0))
         clear_surface(env);
 }
 
 void release_surface_reference(JNIEnv *env) {
+    std::lock_guard<std::mutex> lock(surface_mutex);
     clear_surface(env);
 }

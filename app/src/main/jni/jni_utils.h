@@ -6,13 +6,14 @@
 #define jni_func(return_type, name, ...) JNIEXPORT return_type JNICALL jni_func_name(name) (JNIEnv *env, jobject obj, ##__VA_ARGS__)
 
 bool acquire_jni_env(JavaVM *vm, JNIEnv **env);
+bool init_android_jni_environment(JNIEnv *env, jobject appctx, JavaVM **vm);
 bool init_methods_cache(JNIEnv *env);
 
 #ifndef UTIL_EXTERN
 #define UTIL_EXTERN extern
 #endif
 
-UTIL_EXTERN jclass java_Integer, java_Double, java_Boolean;
+UTIL_EXTERN jclass java_String, java_Integer, java_Double, java_Boolean;
 UTIL_EXTERN jmethodID java_Integer_init, java_Double_init, java_Boolean_init;
 
 UTIL_EXTERN jclass android_graphics_Bitmap, android_graphics_Bitmap_Config;

@@ -13,17 +13,23 @@ extern "C" {
     jni_func(jint, setOptionString, jstring option, jstring value);
 
     jni_func(jobject, getPropertyInt, jstring property);
+    jni_func(void, setPropertyInt, jstring property, jint value);
     jni_func(jint, setPropertyIntResult, jstring property, jint value);
     jni_func(jobject, getPropertyDouble, jstring property);
+    jni_func(void, setPropertyDouble, jstring property, jdouble value);
     jni_func(jint, setPropertyDoubleResult, jstring property, jdouble value);
     jni_func(jobject, getPropertyBoolean, jstring property);
+    jni_func(void, setPropertyBoolean, jstring property, jboolean value);
     jni_func(jint, setPropertyBooleanResult, jstring property, jboolean value);
     jni_func(jstring, getPropertyString, jstring jproperty);
+    jni_func(void, setPropertyString, jstring jproperty, jstring jvalue);
     jni_func(jint, setPropertyStringResult, jstring jproperty, jstring jvalue);
     jni_func(jbyteArray, getPropertyByteArray, jstring jproperty);
     jni_func(jobject, getPropertyNode, jstring jproperty);
+    jni_func(void, setPropertyNode, jstring jproperty, jobject jnode);
     jni_func(jint, setPropertyNodeResult, jstring jproperty, jobject jnode);
 
+    jni_func(void, observeProperty, jstring property, jint format);
     jni_func(jint, observePropertyResult, jstring property, jint format);
 }
 
@@ -43,7 +49,8 @@ static void release_utf_chars(JNIEnv *env, jstring string, const char *chars)
 }
 
 jni_func(jint, setOptionString, jstring joption, jstring jvalue) {
-    if (!check_mpv_initialized())
+    MpvHandleGuard handle;
+    if (!handle)
         return MPV_ERROR_UNINITIALIZED;
 
     const char *option = NULL;
@@ -52,7 +59,7 @@ jni_func(jint, setOptionString, jstring joption, jstring jvalue) {
     if (result >= 0)
         result = get_utf_chars(env, jvalue, &value);
     if (result >= 0)
-        result = mpv_set_option_string(g_mpv, option, value);
+        result = mpv_set_option_string(handle.get(), option, value);
 
     release_utf_chars(env, joption, option);
     release_utf_chars(env, jvalue, value);
@@ -62,14 +69,15 @@ jni_func(jint, setOptionString, jstring joption, jstring jvalue) {
 
 static int common_get_property(JNIEnv *env, jstring jproperty, mpv_format format, void *output)
 {
-    if (!check_mpv_initialized())
+    MpvHandleGuard handle;
+    if (!handle)
         return MPV_ERROR_UNINITIALIZED;
 
     const char *prop = NULL;
     int result = get_utf_chars(env, jproperty, &prop);
     if (result < 0)
         return result;
-    result = mpv_get_property(g_mpv, prop, format, output);
+    result = mpv_get_property(handle.get(), prop, format, output);
     if (result == MPV_ERROR_PROPERTY_UNAVAILABLE)
         ALOGV("mpv_get_property(%s) format %d was unavailable", prop, format);
     else if (result < 0)
@@ -81,14 +89,15 @@ static int common_get_property(JNIEnv *env, jstring jproperty, mpv_format format
 
 static int common_set_property(JNIEnv *env, jstring jproperty, mpv_format format, void *value)
 {
-    if (!check_mpv_initialized())
+    MpvHandleGuard handle;
+    if (!handle)
         return MPV_ERROR_UNINITIALIZED;
 
     const char *prop = NULL;
     int result = get_utf_chars(env, jproperty, &prop);
     if (result < 0)
         return result;
-    result = mpv_set_property(g_mpv, prop, format, value);
+    result = mpv_set_property(handle.get(), prop, format, value);
     if (result < 0)
         ALOGE("mpv_set_property(%s, %p) format %d returned error %s", prop, value, format, mpv_error_string(result));
     release_utf_chars(env, jproperty, prop);
@@ -131,14 +140,26 @@ jni_func(jint, setPropertyIntResult, jstring jproperty, jint jvalue) {
     return common_set_property(env, jproperty, MPV_FORMAT_INT64, &value);
 }
 
+jni_func(void, setPropertyInt, jstring jproperty, jint jvalue) {
+    jni_func_name(setPropertyIntResult)(env, obj, jproperty, jvalue);
+}
+
 jni_func(jint, setPropertyDoubleResult, jstring jproperty, jdouble jvalue) {
     double value = static_cast<double>(jvalue);
     return common_set_property(env, jproperty, MPV_FORMAT_DOUBLE, &value);
 }
 
+jni_func(void, setPropertyDouble, jstring jproperty, jdouble jvalue) {
+    jni_func_name(setPropertyDoubleResult)(env, obj, jproperty, jvalue);
+}
+
 jni_func(jint, setPropertyBooleanResult, jstring jproperty, jboolean jvalue) {
     int value = jvalue == JNI_TRUE ? 1 : 0;
     return common_set_property(env, jproperty, MPV_FORMAT_FLAG, &value);
+}
+
+jni_func(void, setPropertyBoolean, jstring jproperty, jboolean jvalue) {
+    jni_func_name(setPropertyBooleanResult)(env, obj, jproperty, jvalue);
 }
 
 jni_func(jint, setPropertyStringResult, jstring jproperty, jstring jvalue) {
@@ -148,6 +169,10 @@ jni_func(jint, setPropertyStringResult, jstring jproperty, jstring jvalue) {
         result = common_set_property(env, jproperty, MPV_FORMAT_STRING, &value);
     release_utf_chars(env, jvalue, value);
     return result;
+}
+
+jni_func(void, setPropertyString, jstring jproperty, jstring jvalue) {
+    jni_func_name(setPropertyStringResult)(env, obj, jproperty, jvalue);
 }
 
 jni_func(jbyteArray, getPropertyByteArray, jstring jproperty) {
@@ -182,7 +207,8 @@ jni_func(jobject, getPropertyNode, jstring jproperty) {
 }
 
 jni_func(jint, setPropertyNodeResult, jstring jproperty, jobject jnode) {
-    if (!check_mpv_initialized())
+    MpvHandleGuard handle;
+    if (!handle)
         return MPV_ERROR_UNINITIALIZED;
 
     const char *property = NULL;
@@ -193,7 +219,7 @@ jni_func(jint, setPropertyNodeResult, jstring jproperty, jobject jnode) {
     mpv_node node{};
     int parse_error = jobject_to_mpv_node(env, jnode, &node);
     if (parse_error == 0) {
-        result = mpv_set_property(g_mpv, property, MPV_FORMAT_NODE, &node);
+        result = mpv_set_property(handle.get(), property, MPV_FORMAT_NODE, &node);
         free_mpv_node(&node);
         if (result < 0)
             ALOGE("mpv_set_property(%s) returned error %s", property, mpv_error_string(result));
@@ -206,16 +232,25 @@ jni_func(jint, setPropertyNodeResult, jstring jproperty, jobject jnode) {
     return result;
 }
 
+jni_func(void, setPropertyNode, jstring jproperty, jobject jnode) {
+    jni_func_name(setPropertyNodeResult)(env, obj, jproperty, jnode);
+}
+
 jni_func(jint, observePropertyResult, jstring property, jint format) {
-    if (!check_mpv_initialized())
+    MpvHandleGuard handle;
+    if (!handle)
         return MPV_ERROR_UNINITIALIZED;
     const char *prop = NULL;
     int result = get_utf_chars(env, property, &prop);
     if (result < 0)
         return result;
-    result = mpv_observe_property(g_mpv, 0, prop, (mpv_format)format);
+    result = mpv_observe_property(handle.get(), 0, prop, (mpv_format)format);
     if (result < 0)
         ALOGE("mpv_observe_property(%s) format %d returned error %s", prop, format, mpv_error_string(result));
     release_utf_chars(env, property, prop);
     return result;
+}
+
+jni_func(void, observeProperty, jstring property, jint format) {
+    jni_func_name(observePropertyResult)(env, obj, property, format);
 }
