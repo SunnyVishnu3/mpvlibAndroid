@@ -61,6 +61,31 @@ static void sendEventToJava(JNIEnv *env, int event, mpv_node *event_node)
     }
 }
 
+static void sendEndFileEventToJava(JNIEnv *env, mpv_event *mp_event)
+{
+    mpv_event_end_file *event = static_cast<mpv_event_end_file *>(mp_event->data);
+    int reason = event ? event->reason : MPV_END_FILE_REASON_EOF;
+    int error = event ? event->error : MPV_ERROR_SUCCESS;
+    jstring jerror = NULL;
+    if (error < MPV_ERROR_SUCCESS) {
+        const char *error_string = mpv_error_string(error);
+        if (error_string)
+            jerror = env->NewStringUTF(error_string);
+    }
+
+    mpv_node event_node{};
+    mpv_event_to_node(&event_node, mp_event);
+    jobject jnode = mpv_node_to_jobject(env, &event_node);
+    if (jnode) {
+        env->CallStaticVoidMethod(mpv_MPVLib, mpv_MPVLib_eventEndFile_iiSN,
+            static_cast<jint>(reason), static_cast<jint>(error), jerror, jnode);
+        env->DeleteLocalRef(jnode);
+    }
+    mpv_free_node_contents(&event_node);
+    if (jerror)
+        env->DeleteLocalRef(jerror);
+}
+
 static void sendLogMessageToJava(JNIEnv *env, mpv_event_log_message *msg)
 {
     // filter the most obvious cases of invalid utf-8, since Java would choke on it
@@ -84,12 +109,22 @@ static void sendLogMessageToJava(JNIEnv *env, mpv_event_log_message *msg)
         env->DeleteLocalRef(jtext);
 }
 
+static void clearJavaCallbackException(JNIEnv *env)
+{
+    if (!env->ExceptionCheck())
+        return;
+    ALOGE("java event callback raised an exception");
+    env->ExceptionDescribe();
+    env->ExceptionClear();
+}
+
 void *event_thread(void *arg)
 {
     JNIEnv *env = NULL;
-    acquire_jni_env(g_vm, &env);
-    if (!env)
-        die("failed to acquire java env");
+    if (!g_vm || !acquire_jni_env(g_vm, &env) || !env) {
+        ALOGE("failed to acquire java env");
+        return NULL;
+    }
 
     while (1) {
         mpv_event *mp_event;
@@ -114,6 +149,10 @@ void *event_thread(void *arg)
             mp_property = (mpv_event_property*)mp_event->data;
             sendPropertyUpdateToJava(env, mp_property);
             break;
+        case MPV_EVENT_END_FILE:
+            ALOGV("event: %s\n", mpv_event_name(mp_event->event_id));
+            sendEndFileEventToJava(env, mp_event);
+            break;
         default:
             ALOGV("event: %s\n", mpv_event_name(mp_event->event_id));
             mpv_node event_node;
@@ -122,6 +161,7 @@ void *event_thread(void *arg)
             mpv_free_node_contents(&event_node);
             break;
         }
+        clearJavaCallbackException(env);
     }
 
     g_vm->DetachCurrentThread();

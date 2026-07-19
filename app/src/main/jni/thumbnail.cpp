@@ -49,8 +49,9 @@ static inline mpv_node make_node_str(const char *s)
 
 jni_func(jobject, grabThumbnail, jint dimension) {
     auto total_start = std::chrono::high_resolution_clock::now();
-    CHECK_MPV_INIT();
-    init_methods_cache(env);
+    MpvHandleGuard handle;
+    if (!handle || !init_methods_cache(env))
+        return NULL;
 
     mpv_node result{};
     {
@@ -63,7 +64,7 @@ jni_func(jobject, grabThumbnail, jint dimension) {
         c.format = MPV_FORMAT_NODE_ARRAY;
         c.u.list = &c_array;
         
-        if (mpv_command_node(g_mpv, &c, &result) < 0) {
+        if (mpv_command_node(handle.get(), &c, &result) < 0) {
             ALOGE("Thumbnail (MPV) | Screenshot failed");
             return NULL;
         }
@@ -160,8 +161,6 @@ jni_func(jobject, grabThumbnail, jint dimension) {
 // Expected performance: 50-100ms per thumbnail
 // ============================================================================
 
-static JavaVM *g_thumb_vm = nullptr;
-static jobject g_thumb_appctx = nullptr;
 static std::mutex g_thumb_mutex;
 
 // Codec cache for faster initialization
@@ -247,37 +246,13 @@ static void cleanup_thumbnail_resources() {
         }
     }
     
-    // Release JNI global references
-    {
-        std::lock_guard<std::mutex> lock(g_thumb_mutex);
-        if (g_thumb_appctx && g_thumb_vm) {
-            JNIEnv* env = nullptr;
-            if (g_thumb_vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_OK && env) {
-                env->DeleteGlobalRef(g_thumb_appctx);
-                g_thumb_appctx = nullptr;
-            }
-        }
-    }
 }
 
 jni_func(void, setThumbnailJavaVM, jobject appctx) {
     std::lock_guard<std::mutex> lock(g_thumb_mutex);
-    
-    if (g_thumb_appctx) {
-        env->DeleteGlobalRef(g_thumb_appctx);
-        g_thumb_appctx = nullptr;
-    }
-    
-    if (!env->GetJavaVM(&g_thumb_vm) && g_thumb_vm) {
-        av_jni_set_java_vm(g_thumb_vm, NULL);
-    }
-    
-    if (appctx) {
-        g_thumb_appctx = env->NewGlobalRef(appctx);
-        if (g_thumb_appctx) {
-            av_jni_set_android_app_ctx(g_thumb_appctx, NULL);
-        }
-    }
+    JavaVM *vm = NULL;
+    if (!init_android_jni_environment(env, appctx, &vm))
+        ALOGE("Thumbnail | Failed to initialize Android JNI environment");
 }
 
 // Clear codec cache and hardware context
@@ -302,7 +277,8 @@ jni_func(void, clearThumbnailCache) {
 
 // Convert AVFrame to Android Bitmap
 static jobject frame_to_bitmap(JNIEnv *env, AVFrame *frame, int target_dimension) {
-    init_methods_cache(env);
+    if (!init_methods_cache(env))
+        return NULL;
     
     // Calculate scaled dimensions while preserving aspect ratio
     int width = frame->width;
@@ -423,7 +399,8 @@ static AVFrame *get_scalable_frame(AVFrame *frame) {
 
 static jobject grab_thumbnail_fast_impl(JNIEnv *env, const char *path, double position, int dimension, bool use_hw_dec) {
     auto total_start = std::chrono::high_resolution_clock::now();
-    init_methods_cache(env);
+    if (!init_methods_cache(env))
+        return NULL;
 
     // Validate parameters
     if (dimension <= 0 || dimension > 4096) {
@@ -655,7 +632,8 @@ static jobject grab_thumbnail_fast_impl(JNIEnv *env, const char *path, double po
 }
 
 jni_func(jobject, grabThumbnailFast, jstring jpath, jdouble position, jint dimension, jboolean use_hw_dec) {
-    init_methods_cache(env);
+    if (!init_methods_cache(env))
+        return NULL;
 
     if (!jpath) {
         ALOGE("Thumbnail | Invalid path");

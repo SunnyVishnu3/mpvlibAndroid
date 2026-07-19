@@ -22,6 +22,12 @@ cpu=armv7-a
 cpuflags=
 [[ "$ndk_triple" == "arm"* ]] && cpuflags="$cpuflags -mfpu=neon -mcpu=cortex-a8"
 
+audio_filters=(acompressor alimiter equalizer pan silenceremove stereotools volume)
+audio_filter_args=()
+for filter in "${audio_filters[@]}"; do
+	audio_filter_args+=(--enable-filter="$filter")
+done
+
 args=(
 	--target-os=android --enable-cross-compile
 	--cross-prefix=$ndk_triple- --cc=$CC --pkg-config=pkg-config --nm=llvm-nm
@@ -39,6 +45,8 @@ args=(
 	--disable-{muxers,encoders,devices}
 	# useful to taking screenshots
 	--enable-encoder=mjpeg,png
+	# Audio controls exposed through mpv's lavfi audio filter.
+	"${audio_filter_args[@]}"
 	# useful for the `dump-cache` command
 	--enable-muxer=mov,matroska,mpegts
 )

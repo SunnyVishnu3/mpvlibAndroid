@@ -2,6 +2,7 @@ package `is`.xyz.mpv
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.util.Log
 import android.view.Surface
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CoroutineScope
@@ -29,9 +30,13 @@ object MPVLib {
     external fun init()
     external fun destroy()
     external fun attachSurface(surface: Surface)
+    external fun replaceSurface(surface: Surface)
     external fun detachSurface()
 
-    external fun command(vararg cmd: String)
+    fun command(vararg cmd: String) {
+        commandResult(*cmd)
+    }
+    external fun commandResult(vararg cmd: String): Int
     external fun commandNode(vararg cmd: String): MPVNode?
 
     external fun setOptionString(name: String, value: String): Int
@@ -42,15 +47,31 @@ object MPVLib {
     external fun clearThumbnailCache()
 
     external fun getPropertyInt(property: String): Int?
-    external fun setPropertyInt(property: String, value: Int)
+    fun setPropertyInt(property: String, value: Int) {
+        setPropertyIntResult(property, value)
+    }
+    external fun setPropertyIntResult(property: String, value: Int): Int
     external fun getPropertyDouble(property: String): Double?
-    external fun setPropertyDouble(property: String, value: Double)
+    fun setPropertyDouble(property: String, value: Double) {
+        setPropertyDoubleResult(property, value)
+    }
+    external fun setPropertyDoubleResult(property: String, value: Double): Int
     external fun getPropertyBoolean(property: String): Boolean?
-    external fun setPropertyBoolean(property: String, value: Boolean)
+    fun setPropertyBoolean(property: String, value: Boolean) {
+        setPropertyBooleanResult(property, value)
+    }
+    external fun setPropertyBooleanResult(property: String, value: Boolean): Int
     external fun getPropertyString(property: String): String?
-    external fun setPropertyString(property: String, value: String)
+    fun setPropertyString(property: String, value: String) {
+        setPropertyStringResult(property, value)
+    }
+    external fun setPropertyStringResult(property: String, value: String): Int
+    external fun getPropertyByteArray(property: String): ByteArray?
     external fun getPropertyNode(property: String): MPVNode?
-    external fun setPropertyNode(property: String, node: MPVNode)
+    fun setPropertyNode(property: String, node: MPVNode) {
+        setPropertyNodeResult(property, node)
+    }
+    external fun setPropertyNodeResult(property: String, node: MPVNode): Int
 
     @JvmStatic
     fun getPropertyFloat(property: String) = getPropertyDouble(property)?.toFloat()
@@ -61,7 +82,10 @@ object MPVLib {
     @JvmStatic
     fun setPropertyLong(property: String, value: Long) = setPropertyInt(property, value.toInt())
 
-    external fun observeProperty(property: String, format: Int)
+    fun observeProperty(property: String, format: Int) {
+        observePropertyResult(property, format)
+    }
+    external fun observePropertyResult(property: String, format: Int): Int
 
     private val observers: MutableList<EventObserver> = ArrayList()
 
@@ -139,48 +163,69 @@ object MPVLib {
     private fun logObserverSnapshot(): List<LogObserver> =
         synchronized(log_observers) { log_observers.toList() }
 
+    private inline fun notifyEventObservers(callback: (EventObserver) -> Unit) {
+        for (observer in eventObserverSnapshot()) {
+            try {
+                callback(observer)
+            } catch (error: Throwable) {
+                Log.e(TAG, "Event observer callback failed", error)
+            }
+        }
+    }
+
     @JvmStatic
     fun eventProperty(property: String, value: Long) {
-        for (o in eventObserverSnapshot()) o.eventProperty(property, value)
+        notifyEventObservers { it.eventProperty(property, value) }
         propLong.emit(property, value)
         propInt.emit(property, value.toInt())
     }
 
     @JvmStatic
     fun eventProperty(property: String, value: Boolean) {
-        for (o in eventObserverSnapshot()) o.eventProperty(property, value)
+        notifyEventObservers { it.eventProperty(property, value) }
         propBoolean.emit(property, value)
     }
 
     @JvmStatic
     fun eventProperty(property: String, value: Double) {
-        for (o in eventObserverSnapshot()) o.eventProperty(property, value)
+        notifyEventObservers { it.eventProperty(property, value) }
         propDouble.emit(property, value)
         propFloat.emit(property, value.toFloat())
     }
 
     @JvmStatic
     fun eventProperty(property: String, value: String) {
-        for (o in eventObserverSnapshot()) o.eventProperty(property, value)
+        notifyEventObservers { it.eventProperty(property, value) }
         propString.emit(property, value)
     }
 
     @JvmStatic
     fun eventProperty(property: String, value: MPVNode) {
-        for (o in eventObserverSnapshot()) o.eventProperty(property, value)
+        notifyEventObservers { it.eventProperty(property, value) }
         propNode.emit(property, value)
     }
 
     @JvmStatic
     fun eventProperty(property: String) {
-        for (o in eventObserverSnapshot()) o.eventProperty(property)
+        notifyEventObservers { it.eventProperty(property) }
         eventPropertyFlow.tryEmit(property)
     }
 
     @JvmStatic
     fun event(eventId: Int, data: MPVNode) {
-        for (o in eventObserverSnapshot()) o.event(eventId, data)
+        notifyEventObservers { it.event(eventId, data) }
         eventFlow.tryEmit(eventId)
+    }
+
+    @JvmStatic
+    fun eventEndFile(reason: Int, error: Int, errorString: String?, data: MPVNode) {
+        notifyEventObservers {
+            if (it is EndFileObserver)
+                it.eventEndFile(reason, error, errorString, data)
+            else
+                it.event(MpvEvent.MPV_EVENT_END_FILE, data)
+        }
+        eventFlow.tryEmit(MpvEvent.MPV_EVENT_END_FILE)
     }
 
     private val log_observers: MutableList<LogObserver> = ArrayList()
@@ -202,7 +247,13 @@ object MPVLib {
 
     @JvmStatic
     fun logMessage(prefix: String, level: Int, text: String) {
-        for (o in logObserverSnapshot()) o.logMessage(prefix, level, text)
+        for (observer in logObserverSnapshot()) {
+            try {
+                observer.logMessage(prefix, level, text)
+            } catch (error: Throwable) {
+                Log.e(TAG, "Log observer callback failed", error)
+            }
+        }
         logFlow.tryEmit(Triple(prefix, level, text))
     }
 
@@ -214,6 +265,10 @@ object MPVLib {
         fun eventProperty(property: String, value: Double)
         fun eventProperty(property: String, value: MPVNode)
         fun event(eventId: Int, data: MPVNode)
+    }
+
+    interface EndFileObserver : EventObserver {
+        fun eventEndFile(reason: Int, error: Int, errorString: String?, data: MPVNode)
     }
 
     interface LogObserver {
@@ -259,6 +314,38 @@ object MPVLib {
         const val MPV_EVENT_HOOK: Int = 25
     }
 
+    object MpvEndFileReason {
+        const val MPV_END_FILE_REASON_EOF: Int = 0
+        const val MPV_END_FILE_REASON_STOP: Int = 2
+        const val MPV_END_FILE_REASON_QUIT: Int = 3
+        const val MPV_END_FILE_REASON_ERROR: Int = 4
+        const val MPV_END_FILE_REASON_REDIRECT: Int = 5
+    }
+
+    object MpvError {
+        const val MPV_ERROR_SUCCESS: Int = 0
+        const val MPV_ERROR_EVENT_QUEUE_FULL: Int = -1
+        const val MPV_ERROR_NOMEM: Int = -2
+        const val MPV_ERROR_UNINITIALIZED: Int = -3
+        const val MPV_ERROR_INVALID_PARAMETER: Int = -4
+        const val MPV_ERROR_OPTION_NOT_FOUND: Int = -5
+        const val MPV_ERROR_OPTION_FORMAT: Int = -6
+        const val MPV_ERROR_OPTION_ERROR: Int = -7
+        const val MPV_ERROR_PROPERTY_NOT_FOUND: Int = -8
+        const val MPV_ERROR_PROPERTY_FORMAT: Int = -9
+        const val MPV_ERROR_PROPERTY_UNAVAILABLE: Int = -10
+        const val MPV_ERROR_PROPERTY_ERROR: Int = -11
+        const val MPV_ERROR_COMMAND: Int = -12
+        const val MPV_ERROR_LOADING_FAILED: Int = -13
+        const val MPV_ERROR_AO_INIT_FAILED: Int = -14
+        const val MPV_ERROR_VO_INIT_FAILED: Int = -15
+        const val MPV_ERROR_NOTHING_TO_PLAY: Int = -16
+        const val MPV_ERROR_UNKNOWN_FORMAT: Int = -17
+        const val MPV_ERROR_UNSUPPORTED: Int = -18
+        const val MPV_ERROR_NOT_IMPLEMENTED: Int = -19
+        const val MPV_ERROR_GENERIC: Int = -20
+    }
+
     object MpvLogLevel {
         const val MPV_LOG_LEVEL_NONE: Int = 0
         const val MPV_LOG_LEVEL_FATAL: Int = 10
@@ -269,4 +356,6 @@ object MPVLib {
         const val MPV_LOG_LEVEL_DEBUG: Int = 60
         const val MPV_LOG_LEVEL_TRACE: Int = 70
     }
+
+    private const val TAG = "MPVLib"
 }

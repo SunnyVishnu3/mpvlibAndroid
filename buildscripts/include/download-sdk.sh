@@ -10,10 +10,10 @@
 if [ "$os" == "linux" ]; then
 	if [ $IN_CI -eq 0 ]; then
 		if hash yum &>/dev/null; then
-			sudo yum install autoconf pkgconfig libtool ninja-build \
+			sudo yum install autoconf cmake pkgconfig libtool ninja-build \
 				unzip wget meson  python3 nasm
 		elif apt-get -v &>/dev/null; then
-			sudo apt-get install autoconf pkg-config libtool ninja-build \
+			sudo apt-get install autoconf cmake pkg-config libtool ninja-build \
 				unzip wget meson  python3  nasm
 			sudo pip3 install meson
 		else
@@ -38,7 +38,7 @@ elif [ "$os" == "mac" ]; then
 			exit 255
 		fi
 		brew install \
-			automake autoconf libtool pkg-config \
+			automake autoconf cmake libtool pkg-config \
 			coreutils gnu-sed wget meson ninja python
 	fi
 	if ! javac -version &>/dev/null; then

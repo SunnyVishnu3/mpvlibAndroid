@@ -101,6 +101,17 @@ FREETYPE_VERSION=$(pc_version freetype2)
 FRIBIDI_VERSION=$(pc_version fribidi)
 HARFBUZZ_VERSION=$(pc_version harfbuzz)
 LIBUNIBREAK_VERSION=$(pc_version libunibreak)
+LIBBLURAY_VERSION=$(pc_version libbluray)
+LIBUDFREAD_VERSION=$(pc_version libudfread)
+LIBICONV_VERSION=$(pc_version iconv)
+UCHARDET_VERSION=$(pc_version uchardet)
+BZIP2_VERSION=$(pc_version bzip2)
+XZ_VERSION=$(pc_version liblzma)
+ZSTD_VERSION=$(pc_version libzstd)
+LIBARCHIVE_VERSION=$(pc_version libarchive)
+LIBDVDREAD_VERSION=$(pc_version dvdread)
+LIBDVDNAV_VERSION=$(pc_version dvdnav)
+RUBBERBAND_VERSION=$(pc_version rubberband)
 # shaderc is supplied by the selected NDK, whose pkg-config version is a
 # hard-coded pseudo-version. Report its actual provenance instead.
 pc_version shaderc_combined >/dev/null
@@ -121,6 +132,17 @@ require_version FreeType "$FREETYPE_VERSION"
 require_version FriBidi "$FRIBIDI_VERSION"
 require_version HarfBuzz "$HARFBUZZ_VERSION"
 require_version libunibreak "$LIBUNIBREAK_VERSION"
+require_version libbluray "$LIBBLURAY_VERSION"
+require_version libudfread "$LIBUDFREAD_VERSION"
+require_version libiconv "$LIBICONV_VERSION"
+require_version uchardet "$UCHARDET_VERSION"
+require_version bzip2 "$BZIP2_VERSION"
+require_version xz "$XZ_VERSION"
+require_version zstd "$ZSTD_VERSION"
+require_version libarchive "$LIBARCHIVE_VERSION"
+require_version libdvdread "$LIBDVDREAD_VERSION"
+require_version libdvdnav "$LIBDVDNAV_VERSION"
+require_version RubberBand "$RUBBERBAND_VERSION"
 require_version shaderc "$SHADERC_VERSION"
 require_version "Android NDK" "$NDK_VERSION"
 
@@ -176,6 +198,17 @@ write_version freeType "$FREETYPE_VERSION"
 write_version friBidi "$FRIBIDI_VERSION"
 write_version harfBuzz "$HARFBUZZ_VERSION"
 write_version libUnibreak "$LIBUNIBREAK_VERSION"
+write_version libBluray "$LIBBLURAY_VERSION"
+write_version libUdfRead "$LIBUDFREAD_VERSION"
+write_version libIconv "$LIBICONV_VERSION"
+write_version uchardet "$UCHARDET_VERSION"
+write_version bzip2 "$BZIP2_VERSION"
+write_version xz "$XZ_VERSION"
+write_version zstd "$ZSTD_VERSION"
+write_version libArchive "$LIBARCHIVE_VERSION"
+write_version libDvdRead "$LIBDVDREAD_VERSION"
+write_version libDvdNav "$LIBDVDNAV_VERSION"
+write_version rubberBand "$RUBBERBAND_VERSION"
 write_version shaderc "$SHADERC_VERSION"
 write_version androidNdk "$NDK_VERSION"
 
