@@ -1,11 +1,28 @@
 #!/bin/bash -e
 
+set -o pipefail
+
 . ./include/depinfo.sh
 
 [ -z "$IN_CI" ] && IN_CI=0
 [ -z "$WGET" ] && WGET=wget
 
 mkdir -p deps && cd deps
+
+download_extract() {
+	local destination=$1
+	local url=$2
+	local tar_mode=$3
+	local temporary="${destination}.tmp.$$"
+
+	rm -rf "$temporary"
+	mkdir "$temporary"
+	if ! $WGET "$url" -O - | tar "$tar_mode" -C "$temporary" --strip-components=1; then
+		rm -rf "$temporary"
+		return 1
+	fi
+	mv "$temporary" "$destination"
+}
 
 # mbedtls - use git clone with correct directory structure
 if [ ! -d mbedtls ]; then
@@ -78,72 +95,62 @@ fi
 
 # libbluray
 if [ ! -d libbluray ]; then
-	mkdir libbluray
-	$WGET https://downloads.videolan.org/pub/videolan/libbluray/${v_libbluray}/libbluray-${v_libbluray}.tar.xz -O - | \
-		tar -xJ -C libbluray --strip-components=1
+	download_extract libbluray \
+		https://downloads.videolan.org/pub/videolan/libbluray/${v_libbluray}/libbluray-${v_libbluray}.tar.xz -xJ
 fi
 
 # libiconv
 if [ ! -d libiconv ]; then
-	mkdir libiconv
-	$WGET https://ftp.gnu.org/pub/gnu/libiconv/libiconv-${v_libiconv}.tar.gz -O - | \
-		tar -xz -C libiconv --strip-components=1
+	download_extract libiconv \
+		https://ftp.gnu.org/pub/gnu/libiconv/libiconv-${v_libiconv}.tar.gz -xz
 fi
 
 # uchardet
 if [ ! -d uchardet ]; then
-	mkdir uchardet
-	$WGET https://gitlab.freedesktop.org/uchardet/uchardet/-/archive/v${v_uchardet}/uchardet-v${v_uchardet}.tar.gz -O - | \
-		tar -xz -C uchardet --strip-components=1
+	download_extract uchardet \
+		https://gitlab.freedesktop.org/uchardet/uchardet/-/archive/v${v_uchardet}/uchardet-v${v_uchardet}.tar.gz -xz
 fi
 
 # bzip2
 if [ ! -d bzip2 ]; then
-	mkdir bzip2
-	$WGET https://sourceware.org/pub/bzip2/bzip2-${v_bzip2}.tar.gz -O - | \
-		tar -xz -C bzip2 --strip-components=1
+	download_extract bzip2 \
+		https://sourceware.org/pub/bzip2/bzip2-${v_bzip2}.tar.gz -xz
 fi
 
 # xz
 if [ ! -d xz ]; then
-	mkdir xz
-	$WGET https://github.com/tukaani-project/xz/releases/download/v${v_xz}/xz-${v_xz}.tar.xz -O - | \
-		tar -xJ -C xz --strip-components=1
+	download_extract xz \
+		https://github.com/tukaani-project/xz/releases/download/v${v_xz}/xz-${v_xz}.tar.xz -xJ
 fi
 
 # zstd
 if [ ! -d zstd ]; then
-	mkdir zstd
-	$WGET https://github.com/facebook/zstd/releases/download/v${v_zstd}/zstd-${v_zstd}.tar.gz -O - | \
-		tar -xz -C zstd --strip-components=1
+	download_extract zstd \
+		https://github.com/facebook/zstd/releases/download/v${v_zstd}/zstd-${v_zstd}.tar.gz -xz
 fi
 
 # libarchive
 if [ ! -d libarchive ]; then
-	mkdir libarchive
-	$WGET https://github.com/libarchive/libarchive/releases/download/v${v_libarchive}/libarchive-${v_libarchive}.tar.xz -O - | \
-		tar -xJ -C libarchive --strip-components=1
+	download_extract libarchive \
+		https://github.com/libarchive/libarchive/releases/download/v${v_libarchive}/libarchive-${v_libarchive}.tar.xz -xJ
 fi
 
 # libdvdread
 if [ ! -d libdvdread ]; then
-	mkdir libdvdread
-	$WGET https://downloads.videolan.org/pub/videolan/libdvdread/${v_libdvdread}/libdvdread-${v_libdvdread}.tar.xz -O - | \
-		tar -xJ -C libdvdread --strip-components=1
+	download_extract libdvdread \
+		https://downloads.videolan.org/pub/videolan/libdvdread/${v_libdvdread}/libdvdread-${v_libdvdread}.tar.xz -xJ
 fi
 
 # libdvdnav
 if [ ! -d libdvdnav ]; then
-	mkdir libdvdnav
-	$WGET https://downloads.videolan.org/pub/videolan/libdvdnav/${v_libdvdnav}/libdvdnav-${v_libdvdnav}.tar.xz -O - | \
-		tar -xJ -C libdvdnav --strip-components=1
+	download_extract libdvdnav \
+		https://downloads.videolan.org/pub/videolan/libdvdnav/${v_libdvdnav}/libdvdnav-${v_libdvdnav}.tar.xz -xJ
 fi
 
 # rubberband
 if [ ! -d rubberband ]; then
-	mkdir rubberband
-	$WGET https://github.com/breakfastquay/rubberband/archive/refs/tags/v${v_rubberband}.tar.gz -O - | \
-		tar -xz -C rubberband --strip-components=1
+	download_extract rubberband \
+		https://github.com/breakfastquay/rubberband/archive/refs/tags/v${v_rubberband}.tar.gz -xz
 fi
 
 # shaderc

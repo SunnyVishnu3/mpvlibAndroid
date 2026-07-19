@@ -155,6 +155,7 @@ Utils.VERSIONS.dependencies.forEach { (name, version) ->
 | FriBidi | 1.0.16 |
 | libunibreak | 7.0 |
 | libbluray | 1.4.1 |
+| libudfread | 1.2.0 |
 | libiconv | 1.19 |
 | uchardet | 0.0.8 |
 | bzip2 | 1.0.8 |

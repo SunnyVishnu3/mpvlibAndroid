@@ -64,7 +64,7 @@ dep_mpv_android=(mpv)
 # pinned ffmpeg revision
 v_ci_ffmpeg=n8.1.2
 # Bump when a native build recipe changes without a dependency version change.
-v_ci_prefix=2
+v_ci_prefix=3
 
 # filename used to uniquely identify a build prefix
 ci_tarball="prefix-ndk-${v_ndk}-lua-${v_lua}-mujs-${v_mujs}-unibreak-${v_unibreak}-harfbuzz-${v_harfbuzz}-fribidi-${v_fribidi}-freetype-${v_freetype}-mbedtls-${v_mbedtls}-openssl-${v_openssl}-libbluray-${v_libbluray}-libiconv-${v_libiconv}-uchardet-${v_uchardet}-bzip2-${v_bzip2}-xz-${v_xz}-zstd-${v_zstd}-libarchive-${v_libarchive}-libdvdread-${v_libdvdread}-libdvdnav-${v_libdvdnav}-rubberband-${v_rubberband}-ffmpeg-${v_ci_ffmpeg}-prefix-${v_ci_prefix}.tgz"

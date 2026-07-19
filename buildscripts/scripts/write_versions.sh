@@ -102,6 +102,7 @@ FRIBIDI_VERSION=$(pc_version fribidi)
 HARFBUZZ_VERSION=$(pc_version harfbuzz)
 LIBUNIBREAK_VERSION=$(pc_version libunibreak)
 LIBBLURAY_VERSION=$(pc_version libbluray)
+LIBUDFREAD_VERSION=$(pc_version libudfread)
 LIBICONV_VERSION=$(pc_version iconv)
 UCHARDET_VERSION=$(pc_version uchardet)
 BZIP2_VERSION=$(pc_version bzip2)
@@ -132,6 +133,7 @@ require_version FriBidi "$FRIBIDI_VERSION"
 require_version HarfBuzz "$HARFBUZZ_VERSION"
 require_version libunibreak "$LIBUNIBREAK_VERSION"
 require_version libbluray "$LIBBLURAY_VERSION"
+require_version libudfread "$LIBUDFREAD_VERSION"
 require_version libiconv "$LIBICONV_VERSION"
 require_version uchardet "$UCHARDET_VERSION"
 require_version bzip2 "$BZIP2_VERSION"
@@ -197,6 +199,7 @@ write_version friBidi "$FRIBIDI_VERSION"
 write_version harfBuzz "$HARFBUZZ_VERSION"
 write_version libUnibreak "$LIBUNIBREAK_VERSION"
 write_version libBluray "$LIBBLURAY_VERSION"
+write_version libUdfRead "$LIBUDFREAD_VERSION"
 write_version libIconv "$LIBICONV_VERSION"
 write_version uchardet "$UCHARDET_VERSION"
 write_version bzip2 "$BZIP2_VERSION"

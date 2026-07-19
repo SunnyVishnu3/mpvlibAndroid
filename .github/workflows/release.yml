@@ -234,8 +234,12 @@ jobs:
           fi
 
           cp "$AAR_PATH" "$RELEASE_AAR"
+          buildscripts/scripts/verify_aar.sh "$RELEASE_AAR"
 
-          sha256sum "$RELEASE_AAR" > "dist/mpv-android-lib-${VERSION_TAG}.aar.sha256"
+          (
+            cd dist
+            sha256sum "mpv-android-lib-${VERSION_TAG}.aar" > "mpv-android-lib-${VERSION_TAG}.aar.sha256"
+          )
 
       - name: Generate release notes from commit history
         run: |
@@ -331,5 +335,5 @@ jobs:
             dist/mpv-android-lib-${{ env.VERSION_TAG }}.aar
             dist/mpv-android-lib-${{ env.VERSION_TAG }}.aar.sha256
             dist/release-notes-${{ env.VERSION_TAG }}.md
-          draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || true }}
+          draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || false }}
           prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}

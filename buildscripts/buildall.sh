@@ -23,7 +23,7 @@ wasbuilt () {
 
 markbuilt () {
 	varname="built_${1//-/_}"
-	declare -g "$varname=0"
+	printf -v "$varname" '%s' 0
 }
 
 loadarch () {
