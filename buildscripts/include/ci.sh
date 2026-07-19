@@ -79,10 +79,10 @@ elif [ "$1" = "install" ]; then
 
 	msg "Fetching mpv"
 	if [ ! -d deps/mpv ]; then
-		git clone --depth 1 https://github.com/mpv-player/mpv deps/mpv
+		git clone -b fongmi --depth 1 https://github.com/FongMi/mpv.git deps/mpv
 	else
-		git -C deps/mpv fetch --depth 1 origin master
-		git -C deps/mpv reset --hard origin/master
+		git -C deps/mpv fetch --depth 1 origin fongmi
+		git -C deps/mpv reset --hard origin/fongmi
 	fi
 	git -C deps/mpv apply ../../patches/mpv_video_shaders.patch
 
