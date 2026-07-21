@@ -1,4 +1,4 @@
-diff --git a/video/csputils.c b/video/csputils.c
+﻿diff --git a/video/csputils.c b/video/csputils.c
 index 0b000a9..8ab9f17 100644
 --- a/video/csputils.c
 +++ b/video/csputils.c
@@ -122,7 +122,7 @@ index 904289b..e17322c 100644
      GLSL(noise.x = rand(h); h = permute(h);)
      GLSL(noise.y = rand(h); h = permute(h);)
      GLSL(noise.z = rand(h); h = permute(h);)
-@@ -1015,21 +1015,131 @@ void pass_sample_deband(struct gl_shader_cache *sc, struct deband_opts *opts,
+@@ -1015,21 +1015,153 @@ void pass_sample_deband(struct gl_shader_cache *sc, struct deband_opts *opts,
      GLSLF("}\n");
  }
  
@@ -145,13 +145,20 @@ index 904289b..e17322c 100644
 +// Mali), this is ~1-2% additional memory bandwidth -- negligible in practice.
 +//
 +// ALGORITHMS PORTED FROM Anime4K-Ultra_DbH_Sharp.glsl:
-+//   - FSR RCAS (AMD FidelityFX Super Resolution): lines 443-501
-+//   - Valley Darken: lines 936-996
++//   - Luma-Sharp USM  (Step 4.5): GLSL lines 519-529   [LUMA_SHARP_AMOUNT 1.5]
++//   - FSR RCAS        (Step 2):   GLSL lines 443-501
++//   - Valley Darken   (Step 5):   GLSL lines 936-996   [DARKEN_STRENGTH 0.60]
++//
++// Effective 2x sharpening vs original single-pass design (at param=5):
++//   RCAS lobe:      *1.0 vs GLSL *exp2(-0.8)~0.574 -> already 1.74x GLSL RCAS
++//   Luma-Sharp USM: strength 1.5  -> matches GLSL LUMA_SHARP_AMOUNT 1.5
++//   Valley Darken:  p*0.12 -> 0.60 -> matches GLSL DARKEN_STRENGTH 0.60
 +//
 +// param range: 0 (off) to 5 (maximum Anime4K-like quality).
 +//   Texture color data: mediump (FP16) for bandwidth efficiency.
 +//   RCAS lobe math:     highp    (required -- near-zero denominators in
 +//                                 hitMaxL cause NaN/inf at mediump precision).
++//   Luma-Sharp USM:     highp blur9/detail; applied as luma-only RGB scale.
 +//
 +// THIRD-PARTY NOTICE:
 +//   FSR RCAS algorithm: Copyright (c) 2021 Advanced Micro Devices, Inc. (MIT)
@@ -255,6 +262,19 @@ index 904289b..e17322c 100644
 +        (float(lobe) * (card_sum + 0.5 * diag_sum) + base.rgb) * rcpL,
 +        0.0, 1.0);)
 +
++    // -- Step 4.5: Luma-Sharp inline USM (zero extra texture reads) ---------
++    // Mirrors Anime4K_Thin_AA_Deblur-Heavy.glsl "Luma-Sharp" pass:
++    //   sharp_luma = luma_rcas + (e - blur9) * USM_STRENGTH
++    // Box-blur uses the 9 pre-RCAS luma taps already in registers.
++    // USM_STRENGTH scales 0.0->1.5 as param goes 0->5 (LUMA_SHARP_AMOUNT 1.5).
++    // Applied luma-only via uniform RGB scale to preserve chroma.
++    GLSL(highp float blur9 = (b + d + f + h + g1 + g2 + g3 + g4 + e) * (1.0/9.0);)
++    GLSL(highp float usm_detail = e - blur9;)
++    GLSLF("mediump float usm_str = %f;\n", (double)(p * 0.3f));
++    GLSL(mediump float rcas_luma = dot(color.rgb, vec3(0.299, 0.587, 0.114));)
++    GLSL(mediump float sharp_luma = clamp(rcas_luma + float(usm_detail) * usm_str, 0.0, 1.0);)
++    GLSL(color.rgb = (rcas_luma > 1e-3) ? clamp(color.rgb * (sharp_luma / rcas_luma), 0.0, 1.0) : color.rgb;)
++
 +    // -- Step 5: Valley Darken -- 8-neighbor ink valley detection -----------
 +    GLSL(mediump float mid_luma = float((mn1 + mx1) * 0.5);)
 +    GLSL(mediump float valley   = clamp(
@@ -262,7 +282,7 @@ index 904289b..e17322c 100644
 +             0.0, 1.0);)
 +    GLSL(mediump float luma_gate = 1.0 - smoothstep(0.08, 0.88, float(e));)
 +    GLSLF("mediump float delta = min(%f * valley * float(e) * luma_gate,"
-+          " float(e) * 0.35);\n", (double)(p * 0.06f));
++          " float(e) * 0.35);\n", (double)(p * 0.12f));
 +    GLSL(color.rgb *= clamp((float(e) - delta) / max(float(e), 1e-5), 0.0, 1.0);)
 +    GLSL(color.a = base.a;)
 +
