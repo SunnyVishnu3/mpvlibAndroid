@@ -216,3 +216,4 @@ if grep -qE '%[A-Z0-9_]+%' "$versions_file"; then
 	echo "Unresolved version placeholders remain in $versions_file." >&2
 	exit 1
 fi
+exit 0

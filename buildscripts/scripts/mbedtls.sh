@@ -36,3 +36,6 @@ cmake --build . -j"$cores"
 cmake --install .
 
 echo "mbedtls installed to $prefix_dir"
+
+# Expose statically-linked dependencies so FFmpeg actually links against them
+sed -i 's/Requires.private:/Requires:/g' "$prefix_dir/lib/pkgconfig/"*.pc

@@ -67,7 +67,7 @@ include $(CLEAR_VARS)
 
 LOCAL_MODULE    := libplayer
 LOCAL_CFLAGS    := -Werror
-LOCAL_CPPFLAGS  += -std=c++11
+LOCAL_CPPFLAGS  += -std=c++17
 LOCAL_SRC_FILES := \
 	main.cpp \
 	render.cpp \
@@ -77,7 +77,7 @@ LOCAL_SRC_FILES := \
 	event.cpp \
 	node.cpp \
 	thumbnail.cpp
-LOCAL_LDLIBS    := -llog -lGLESv3 -lEGL -latomic -ljnigraphics
+LOCAL_LDLIBS    := -llog -lGLESv3 -lEGL -ljnigraphics
 LOCAL_SHARED_LIBRARIES := swscale avcodec avformat avutil mpv
 
 include $(BUILD_SHARED_LIBRARY)
