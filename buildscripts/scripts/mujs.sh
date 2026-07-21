@@ -23,7 +23,7 @@ echo "prefix_dir=$prefix_dir"
 # Build MuJS as static library.
 # IMPORTANT: use CC from buildall.sh.
 # Do not manually override CC here.
-"$CC" -O3 -fPIC -c ../one.c -o one.o
+"$CC" $CFLAGS -O3 -fPIC -c ../one.c -o one.o
 "$AR" rcs libmujs.a one.o
 "$RANLIB" libmujs.a
 

@@ -11,7 +11,7 @@ else
 	exit 255
 fi
 
-export CFLAGS="-Os"
+export CFLAGS="${CFLAGS//-O3/-Os}"
 
 mkdir -p _build$ndk_suffix
 cd _build$ndk_suffix
