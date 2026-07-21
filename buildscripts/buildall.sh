@@ -45,8 +45,8 @@ loadarch () {
 		export android_abi=arm64-v8a
 		cc_triple=$ndk_triple$apilvl
 		prefix_name=arm64
-		export CFLAGS="-O3 -march=armv8.2-a+crypto+dotprod+fp16+i8mm+bf16+sha3 -mtune=cortex-x4 -fno-math-errno -fomit-frame-pointer -pipe -fvisibility=hidden -ffunction-sections -fdata-sections"
-		export CXXFLAGS="$CFLAGS -fvisibility-inlines-hidden"
+		export CFLAGS="-O3 -march=armv8.2-a+crypto+dotprod+fp16+i8mm+bf16+sha3 -mtune=cortex-x4 -fno-math-errno -fomit-frame-pointer -pipe -ffunction-sections -fdata-sections"
+		export CXXFLAGS="$CFLAGS"
 	elif [ "$1" == "x86" ]; then
 		export ndk_suffix=-x86
 		export ndk_triple=i686-linux-android

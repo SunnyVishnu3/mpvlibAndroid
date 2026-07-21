@@ -178,7 +178,7 @@ write_version() {
 		echo "Version property '$property' is missing from $versions_file." >&2
 		exit 1
 	fi
-	${SED:-sed} -i -E 's|^([[:space:]]*'"$property"' = ).*(,)$|\1"'"$value"'"\2|' "$versions_file"
+	perl -pi -e "s/^([ \t]*$property = ).*(,)\r?\$/\$1\"$value\"\$2/" "$versions_file"
 }
 
 # Replace complete property assignments so repeated local builds refresh values
