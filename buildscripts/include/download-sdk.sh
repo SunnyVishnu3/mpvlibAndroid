@@ -13,7 +13,7 @@ if [ "$os" == "linux" ]; then
 			sudo yum install autoconf cmake pkgconfig libtool ninja-build \
 				unzip wget meson  python3 nasm
 		elif apt-get -v &>/dev/null; then
-			sudo apt-get install autoconf cmake pkg-config libtool ninja-build \
+			sudo apt-get install -y autoconf cmake pkg-config libtool ninja-build \
 				unzip wget meson  python3  nasm
 			sudo pip3 install meson
 		else
