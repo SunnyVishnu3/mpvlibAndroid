@@ -21,6 +21,12 @@ android {
         buildConfig = true
     }
 
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/libs']
+        }
+    }
+
     // https://youtrack.jetbrains.com/issue/KT-55947
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
