@@ -35,11 +35,11 @@ fi
 # dav1d (canonical repo, GitHub is read-only mirror)
 [ ! -d dav1d ] && git clone https://github.com/videolan/dav1d
 
-# ffmpeg
+# ffmpeg (using FongMI fork which has av_mediacodec_get_buffer_timestamp)
 if [ ! -d ffmpeg ]; then
-	git clone https://github.com/FFmpeg/FFmpeg ffmpeg
-	[ $IN_CI -eq 1 ] && git -C ffmpeg checkout $v_ci_ffmpeg
+	git clone --branch release-8.1-fongmi https://github.com/FongMi/FFmpeg.git ffmpeg
 fi
+
 
 # freetype2
 if [ ! -d freetype2 ]; then
@@ -114,7 +114,7 @@ fi
 # bzip2
 if [ ! -d bzip2 ]; then
 	download_extract bzip2 \
-		https://sourceware.org/pub/bzip2/bzip2-${v_bzip2}.tar.gz -xz
+		https://deb.debian.org/debian/pool/main/b/bzip2/bzip2_${v_bzip2}.orig.tar.gz -xz
 fi
 
 # xz
