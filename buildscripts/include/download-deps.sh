@@ -83,13 +83,6 @@ if [ ! -d unibreak ]; then
 		tar -xz -C unibreak --strip-components=1
 fi
 
-# fontconfig
-if [ ! -d fontconfig ]; then
-	mkdir fontconfig
-	$WGET https://gitlab.freedesktop.org/fontconfig/fontconfig/-/archive/${v_fontconfig}/fontconfig-${v_fontconfig}.tar.gz -O - | \
-		tar -xz -C fontconfig --strip-components=1
-fi
-
 # libass - use GitHub mirror
 [ ! -d libass ] && git clone https://github.com/libass/libass
 

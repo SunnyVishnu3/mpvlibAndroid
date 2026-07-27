@@ -17,7 +17,6 @@ v_freetype=2.14.3
 v_mbedtls=3.6.7
 v_libxml2=2.15.3
 v_libaribcaption=1.1.1
-v_fontconfig=2.18.2
 v_curl=8.21.0
 v_openssl=3.5.7
 v_mujs=1.3.9
@@ -47,11 +46,10 @@ dep_libxml2=()
 dep_freetype2=()
 dep_libaribcaption=(freetype2)
 dep_ffmpeg=(mbedtls dav1d libxml2 libaribcaption)
-dep_fontconfig=(libxml2 freetype2)
 dep_fribidi=()
 dep_harfbuzz=()
 dep_unibreak=()
-dep_libass=(freetype2 fontconfig fribidi harfbuzz unibreak)
+dep_libass=(freetype2 fribidi harfbuzz unibreak)
 dep_lua=()
 dep_mujs=()
 dep_openssl=()
@@ -78,4 +76,4 @@ v_ci_libplacebo=master
 v_ci_prefix=4
 
 # filename used to uniquely identify a build prefix
-ci_tarball="prefix-ndk-${v_ndk}-opengl-vulkan-shaderc-lua-${v_lua}-mujs-${v_mujs}-unibreak-${v_unibreak}-harfbuzz-${v_harfbuzz}-fribidi-${v_fribidi}-freetype-${v_freetype}-libxml2-${v_libxml2}-libaribcaption-${v_libaribcaption}-fontconfig-${v_fontconfig}-mbedtls-${v_mbedtls}-curl-${v_curl}-openssl-${v_openssl}-libbluray-${v_libbluray}-libiconv-${v_libiconv}-uchardet-${v_uchardet}-bzip2-${v_bzip2}-xz-${v_xz}-zstd-${v_zstd}-libarchive-${v_libarchive}-libdvdread-${v_libdvdread}-libdvdnav-${v_libdvdnav}-rubberband-${v_rubberband}-ffmpeg-${v_ci_ffmpeg}-prefix-${v_ci_prefix}.tgz"
+ci_tarball="prefix-ndk-${v_ndk}-opengl-vulkan-shaderc-lua-${v_lua}-mujs-${v_mujs}-unibreak-${v_unibreak}-harfbuzz-${v_harfbuzz}-fribidi-${v_fribidi}-freetype-${v_freetype}-libxml2-${v_libxml2}-libaribcaption-${v_libaribcaption}${v_fontconfig}-mbedtls-${v_mbedtls}-curl-${v_curl}-openssl-${v_openssl}-libbluray-${v_libbluray}-libiconv-${v_libiconv}-uchardet-${v_uchardet}-bzip2-${v_bzip2}-xz-${v_xz}-zstd-${v_zstd}-libarchive-${v_libarchive}-libdvdread-${v_libdvdread}-libdvdnav-${v_libdvdnav}-rubberband-${v_rubberband}-ffmpeg-${v_ci_ffmpeg}-prefix-${v_ci_prefix}.tgz"
