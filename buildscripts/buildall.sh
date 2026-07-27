@@ -88,6 +88,16 @@ setup_prefix () {
 		ln -s . "$prefix_dir/local"
 	fi
 
+	mkdir -p "$prefix_dir/lib/pkgconfig"
+	# Android provides Vulkan but no pkg-config file; keep this in sync with the pinned NDK's vulkan_core.h.
+	cat >"$prefix_dir/lib/pkgconfig/vulkan.pc" <<VULKANPC
+Name: Vulkan-Loader
+Description: Android Vulkan loader
+Version: 1.3.275
+Libs: -lvulkan
+Cflags:
+VULKANPC
+
 	local cpu_family=${ndk_triple%%-*}
 	[ "$cpu_family" == "i686" ] && cpu_family=x86
 
@@ -148,8 +158,8 @@ build () {
 		pushd deps/$1
 		BUILDSCRIPT=../../scripts/$1.sh
 	fi
-	[ $cleanbuild -eq 1 ] && $BUILDSCRIPT clean
-	$BUILDSCRIPT build
+	[ $cleanbuild -eq 1 ] && bash "$BUILDSCRIPT" clean
+	bash "$BUILDSCRIPT" build
 	popd
 	markbuilt "$1"
 }

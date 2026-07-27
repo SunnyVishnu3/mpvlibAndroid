@@ -16,8 +16,12 @@ if [ -z "$android_abi" ]; then
 	exit 1
 fi
 
-# Work around Mbed-TLS/mbedtls#10668. Remove when upgrading past 3.6.6.
-./scripts/config.py unset MBEDTLS_X509_RSASSA_PSS_SUPPORT
+# Configure AESNI for non-x86 hardware AES acceleration
+if [[ "$ndk_triple" == "i686"* ]]; then
+	./scripts/config.py unset MBEDTLS_AESNI_C
+else
+	./scripts/config.py set MBEDTLS_AESNI_C
+fi
 
 mkdir -p _build$ndk_suffix
 cd _build$ndk_suffix

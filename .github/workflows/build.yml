@@ -13,6 +13,11 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  MPV_GIT_URL: https://github.com/FongMi/mpv
+  MPV_GIT_REF: fongmi
+  MPV_ANDROID_ARCHES: armv7l arm64
+
 jobs:
   build:
     name: Build Android AAR

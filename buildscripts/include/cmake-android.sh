@@ -2,10 +2,18 @@
 
 android_cmake_abi () {
 	case "$prefix_name" in
-		armv7l) echo armeabi-v7a ;;
-		arm64) echo arm64-v8a ;;
-		x86) echo x86 ;;
-		x86_64) echo x86_64 ;;
+		armv7l)
+			echo armeabi-v7a
+			;;
+		arm64)
+			echo arm64-v8a
+			;;
+		x86)
+			echo x86
+			;;
+		x86_64)
+			echo x86_64
+			;;
 		*)
 			echo "Invalid architecture: $prefix_name" >&2
 			return 1
@@ -36,9 +44,11 @@ android_cmake_setup () {
 }
 
 android_cmake_build () {
-	cmake --build "$1" --parallel "$cores"
+	local build_dir=$1
+	cmake --build "$build_dir" --parallel "$cores"
 }
 
 android_cmake_install () {
-	DESTDIR="$prefix_dir" cmake --install "$1"
+	local build_dir=$1
+	DESTDIR="$prefix_dir" cmake --install "$build_dir"
 }

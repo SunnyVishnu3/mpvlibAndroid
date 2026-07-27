@@ -14,7 +14,11 @@ v_unibreak=7.0
 v_harfbuzz=14.2.1
 v_fribidi=1.0.16
 v_freetype=2.14.3
-v_mbedtls=3.6.6
+v_mbedtls=3.6.7
+v_libxml2=2.15.3
+v_libaribcaption=1.1.1
+v_fontconfig=2.18.2
+v_curl=8.21.0
 v_openssl=3.5.7
 v_mujs=1.3.9
 v_libbluray=1.4.1
@@ -39,32 +43,39 @@ dep_xz=()
 dep_zstd=()
 dep_mbedtls=()
 dep_dav1d=()
-dep_ffmpeg=(mbedtls dav1d)
+dep_libxml2=()
 dep_freetype2=()
+dep_libaribcaption=(freetype2)
+dep_ffmpeg=(mbedtls dav1d libxml2 libaribcaption)
+dep_fontconfig=(libxml2 freetype2)
 dep_fribidi=()
 dep_harfbuzz=()
 dep_unibreak=()
-dep_libass=(freetype2 fribidi harfbuzz unibreak)
+dep_libass=(freetype2 fontconfig fribidi harfbuzz unibreak)
 dep_lua=()
 dep_mujs=()
 dep_openssl=()
 dep_shaderc=()
 dep_libplacebo=(shaderc)
+dep_curl=(mbedtls)
 dep_libbluray=()
 dep_libarchive=(libiconv bzip2 xz zstd)
 dep_libdvdread=()
 dep_libdvdnav=(libdvdread)
 dep_rubberband=()
-dep_mpv=(ffmpeg libass lua libplacebo mujs libbluray libiconv uchardet libarchive libdvdnav rubberband)
+dep_mpv=(ffmpeg libass lua libplacebo mujs curl libbluray libiconv uchardet libarchive libdvdnav rubberband)
 dep_mpv_android=(mpv)
 
 
 ## for CI workflow
 
-# pinned ffmpeg revision
-v_ci_ffmpeg=n8.1.2
+# CI resolves these movable branches to immutable commits before selecting a cache.
+v_ci_ffmpeg=release-8.1-fongmi
+v_ci_dav1d=master
+v_ci_libass=master
+v_ci_libplacebo=master
 # Bump when a native build recipe changes without a dependency version change.
-v_ci_prefix=3
+v_ci_prefix=4
 
 # filename used to uniquely identify a build prefix
-ci_tarball="prefix-ndk-${v_ndk}-lua-${v_lua}-mujs-${v_mujs}-unibreak-${v_unibreak}-harfbuzz-${v_harfbuzz}-fribidi-${v_fribidi}-freetype-${v_freetype}-mbedtls-${v_mbedtls}-openssl-${v_openssl}-libbluray-${v_libbluray}-libiconv-${v_libiconv}-uchardet-${v_uchardet}-bzip2-${v_bzip2}-xz-${v_xz}-zstd-${v_zstd}-libarchive-${v_libarchive}-libdvdread-${v_libdvdread}-libdvdnav-${v_libdvdnav}-rubberband-${v_rubberband}-ffmpeg-${v_ci_ffmpeg}-prefix-${v_ci_prefix}.tgz"
+ci_tarball="prefix-ndk-${v_ndk}-opengl-vulkan-shaderc-lua-${v_lua}-mujs-${v_mujs}-unibreak-${v_unibreak}-harfbuzz-${v_harfbuzz}-fribidi-${v_fribidi}-freetype-${v_freetype}-libxml2-${v_libxml2}-libaribcaption-${v_libaribcaption}-fontconfig-${v_fontconfig}-mbedtls-${v_mbedtls}-curl-${v_curl}-openssl-${v_openssl}-libbluray-${v_libbluray}-libiconv-${v_libiconv}-uchardet-${v_uchardet}-bzip2-${v_bzip2}-xz-${v_xz}-zstd-${v_zstd}-libarchive-${v_libarchive}-libdvdread-${v_libdvdread}-libdvdnav-${v_libdvdnav}-rubberband-${v_rubberband}-ffmpeg-${v_ci_ffmpeg}-prefix-${v_ci_prefix}.tgz"

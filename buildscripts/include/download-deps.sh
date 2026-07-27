@@ -48,6 +48,20 @@ if [ ! -d freetype2 ]; then
 		tar -xz -C freetype2 --strip-components=1
 fi
 
+# libaribcaption
+if [ ! -d libaribcaption ]; then
+	mkdir libaribcaption
+	$WGET https://github.com/xqq/libaribcaption/archive/refs/tags/v${v_libaribcaption}.tar.gz -O - | \
+		tar -xz -C libaribcaption --strip-components=1
+fi
+
+# libxml2
+if [ ! -d libxml2 ]; then
+	mkdir libxml2
+	$WGET https://gitlab.gnome.org/GNOME/libxml2/-/archive/v${v_libxml2}/libxml2-v${v_libxml2}.tar.gz -O - | \
+		tar -xz -C libxml2 --strip-components=1
+fi
+
 # fribidi - use vX.Y.Z tag format for releases
 if [ ! -d fribidi ]; then
 	mkdir fribidi
@@ -67,6 +81,13 @@ if [ ! -d unibreak ]; then
 	mkdir unibreak
 	$WGET https://github.com/adah1972/libunibreak/releases/download/libunibreak_${v_unibreak//./_}/libunibreak-${v_unibreak}.tar.gz -O - | \
 		tar -xz -C unibreak --strip-components=1
+fi
+
+# fontconfig
+if [ ! -d fontconfig ]; then
+	mkdir fontconfig
+	$WGET https://gitlab.freedesktop.org/fontconfig/fontconfig/-/archive/${v_fontconfig}/fontconfig-${v_fontconfig}.tar.gz -O - | \
+		tar -xz -C fontconfig --strip-components=1
 fi
 
 # libass - use GitHub mirror
@@ -114,7 +135,7 @@ fi
 # bzip2
 if [ ! -d bzip2 ]; then
 	download_extract bzip2 \
-		https://deb.debian.org/debian/pool/main/b/bzip2/bzip2_${v_bzip2}.orig.tar.gz -xz
+		https://fossies.org/linux/misc/bzip2-${v_bzip2}.tar.gz -xz
 fi
 
 # xz
@@ -151,6 +172,13 @@ fi
 if [ ! -d rubberband ]; then
 	download_extract rubberband \
 		https://github.com/breakfastquay/rubberband/archive/refs/tags/v${v_rubberband}.tar.gz -xz
+fi
+
+# curl
+if [ ! -d curl ]; then
+	mkdir curl
+	$WGET https://curl.se/download/curl-$v_curl.tar.gz -O - | \
+		tar -xz -C curl --strip-components=1
 fi
 
 # shaderc

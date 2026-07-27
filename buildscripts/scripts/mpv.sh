@@ -82,13 +82,12 @@ meson setup $build --cross-file "$prefix_dir"/crossfile.txt \
 	-Duchardet=enabled \
 	-Dlibarchive=enabled \
 	-Ddvdnav=enabled \
-	-Dlua=enabled \
+	-D{lua,libcurl,rubberband}=enabled \
 	-Djavascript=enabled \
 	-Dvulkan=enabled \
 	-Dlibmpv=true \
 	-Dcplayer=false \
 	-Dlibbluray=enabled \
-	-Drubberband=enabled \
 	-Dmanpage-build=disabled
 
 ninja -C $build -j$cores
