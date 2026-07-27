@@ -100,12 +100,13 @@ jni_func(void, create, jobject appctx) {
         return;
     }
 
-    // use terminal log level but request verbose messages
-    // this way --msg-level can be used to adjust later
-    int result = mpv_request_log_messages(handle, "terminal-default");
+    // Request warn-level logs only — verbose logging causes hundreds of JNI
+    // round-trips per second during playback which burns CPU and battery.
+    // msg-level can still be overridden via mpv config at runtime if needed.
+    int result = mpv_request_log_messages(handle, "warn");
     if (result < 0)
         ALOGE("mpv_request_log_messages failed: %s", mpv_error_string(result));
-    result = mpv_set_option_string(handle, "msg-level", "all=v");
+    result = mpv_set_option_string(handle, "msg-level", "all=warn");
     if (result < 0)
         ALOGE("setting msg-level failed: %s", mpv_error_string(result));
     finish_mpv_create(handle);
