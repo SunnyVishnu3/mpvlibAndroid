@@ -320,9 +320,9 @@ object Utils {
     ) {
         val dependencies: Map<String, String>
             get() = linkedMapOf(
-                "mpv" to mpv,
+                "mpv FongMI" to mpv,
                 "libmpv client API" to mpvClientApi,
-                "FFmpeg" to ffmpeg,
+                "FFmpeg FongMI" to ffmpeg,
                 "libavcodec" to libAvcodec,
                 "libplacebo" to libPlacebo,
                 "libass" to libAss,
@@ -351,11 +351,11 @@ object Utils {
     }
 
     val VERSIONS = Versions(
-        mpv = "%MPV_VERSION%",
+        mpv = "%MPV_VERSION%-FongMI",
         mpvClientApi = "%MPV_CLIENT_API_VERSION%",
         buildDate = "%DATE%",
         libPlacebo = "%LIBPLACEBO_VERSION%",
-        ffmpeg = "%FFMPEG_VERSION%",
+        ffmpeg = "%FFMPEG_VERSION%-FongMI",
         libAvcodec = "%LIBAVCODEC_VERSION%",
         libAss = "%LIBASS_VERSION%",
         dav1d = "%DAV1D_VERSION%",

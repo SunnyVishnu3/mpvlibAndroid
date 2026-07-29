@@ -12,13 +12,13 @@ extern "C" {
     jni_func(void, attachSurface, jobject surface_);
     jni_func(void, replaceSurface, jobject surface_);
     jni_func(void, detachSurface);
-    jni_func(void, attachSubtitleSurface, jobject surface_);
-    jni_func(void, replaceSubtitleSurface, jobject surface_);
-    jni_func(void, detachSubtitleSurface);
+    jni_func(void, attachOsdSurface, jobject surface_);
+    jni_func(void, replaceOsdSurface, jobject surface_);
+    jni_func(void, detachOsdSurface);
 };
 
 static jobject surface;
-static jobject subtitle_surface;
+static jobject osd_surface;
 static std::mutex surface_mutex;
 
 // Set wid via mpv_set_option (used during init before property is available)
@@ -110,37 +110,37 @@ jni_func(void, detachSurface) {
         clear_surface(env, &surface);
 }
 
-// ── Subtitle surface (separate ANativeWindow for subtitle overlay) ────────────
+// ── OSD surface (separate ANativeWindow for subtitles, OSD and script overlays) ─
 
-jni_func(void, attachSubtitleSurface, jobject surface_) {
+jni_func(void, attachOsdSurface, jobject surface_) {
     MpvHandleGuard handle;
     if (!handle) {
         throw_java_exception(env, "libmpv is not initialized");
         return;
     }
     std::lock_guard<std::mutex> lock(surface_mutex);
-    update_surface(env, nullptr, surface_, &subtitle_surface, "android-subtitle-wid");
+    update_surface(env, nullptr, surface_, &osd_surface, "android-osd-wid");
 }
 
-jni_func(void, replaceSubtitleSurface, jobject surface_) {
+jni_func(void, replaceOsdSurface, jobject surface_) {
     MpvHandleGuard handle;
     if (!handle) {
         throw_java_exception(env, "libmpv is not initialized");
         return;
     }
     std::lock_guard<std::mutex> lock(surface_mutex);
-    update_surface(env, nullptr, surface_, &subtitle_surface, "android-subtitle-wid");
+    update_surface(env, nullptr, surface_, &osd_surface, "android-osd-wid");
 }
 
-jni_func(void, detachSubtitleSurface) {
+jni_func(void, detachOsdSurface) {
     MpvHandleGuard handle;
     if (!handle) {
         throw_java_exception(env, "libmpv is not initialized");
         return;
     }
     std::lock_guard<std::mutex> lock(surface_mutex);
-    if (set_surface_property("android-subtitle-wid", 0))
-        clear_surface(env, &subtitle_surface);
+    if (set_surface_property("android-osd-wid", 0))
+        clear_surface(env, &osd_surface);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -148,5 +148,5 @@ jni_func(void, detachSubtitleSurface) {
 void release_surface_reference(JNIEnv *env) {
     std::lock_guard<std::mutex> lock(surface_mutex);
     clear_surface(env, &surface);
-    clear_surface(env, &subtitle_surface);
+    clear_surface(env, &osd_surface);
 }

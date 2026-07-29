@@ -36,16 +36,6 @@ else
 	exit 255
 fi
 
-# Android provides Vulkan, but no pkgconfig file.
-mkdir -p "$prefix_dir"/lib/pkgconfig
-cat >"$prefix_dir"/lib/pkgconfig/vulkan.pc <<END
-Name: Vulkan
-Description:
-Version: 1.3.275
-Libs: -lvulkan
-Cflags:
-END
-
 unset CC CXX # meson wants these unset
 
 check_iconv_files

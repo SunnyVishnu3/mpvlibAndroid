@@ -32,9 +32,9 @@ object MPVLib {
     external fun attachSurface(surface: Surface)
     external fun replaceSurface(surface: Surface)
     external fun detachSurface()
-    external fun attachSubtitleSurface(surface: Surface)
-    external fun replaceSubtitleSurface(surface: Surface)
-    external fun detachSubtitleSurface()
+    external fun attachOsdSurface(surface: Surface)
+    external fun replaceOsdSurface(surface: Surface)
+    external fun detachOsdSurface()
 
     fun command(vararg cmd: String) {
         commandResult(*cmd)

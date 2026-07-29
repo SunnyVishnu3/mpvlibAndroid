@@ -78,6 +78,15 @@ loadarch () {
 	export LDFLAGS="-Wl,-O1,--gc-sections,--icf=safe -Wl,-z,max-page-size=16384"
 	export AR=llvm-ar
 	export RANLIB=llvm-ranlib
+
+	# set up correct paths for pkg-config to find cross-compiled .pc files
+	if ! command -v pkg-config >/dev/null; then
+		echo "pkg-config is missing!" >&2
+		return 1
+	fi
+	export PKG_CONFIG_SYSROOT_DIR="$prefix_dir"
+	export PKG_CONFIG_LIBDIR="$PKG_CONFIG_SYSROOT_DIR/lib/pkgconfig"
+	unset PKG_CONFIG_PATH
 }
 
 setup_prefix () {
