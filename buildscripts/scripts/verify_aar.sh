@@ -16,7 +16,6 @@ abis=(armeabi-v7a arm64-v8a)
 [ "$ENABLE_X86_ARCH" = "true" ] && abis+=(x86 x86_64)
 libraries=(
 	libavcodec.so
-	libavdevice.so
 	libavfilter.so
 	libavformat.so
 	libavutil.so
