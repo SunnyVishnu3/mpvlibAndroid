@@ -65,7 +65,7 @@ if [ ! -d dav1d ]; then
 			"${DAV1D_GIT_URL:-https://github.com/videolan/dav1d}" \
 			"$DAV1D_GIT_COMMIT" dav1d
 	else
-		git clone --branch "$v_ci_dav1d" \
+		git clone --depth 1 --branch "$v_ci_dav1d" \
 			"${DAV1D_GIT_URL:-https://github.com/videolan/dav1d}" dav1d
 	fi
 fi
@@ -78,7 +78,7 @@ if [ ! -d ffmpeg ]; then
 			"${FFMPEG_GIT_URL:-https://github.com/FongMi/FFmpeg.git}" \
 			"$FFMPEG_GIT_COMMIT" ffmpeg
 	else
-		git clone --branch "$v_ci_ffmpeg" \
+		git clone --depth 1 --branch "$v_ci_ffmpeg" \
 			"${FFMPEG_GIT_URL:-https://github.com/FongMi/FFmpeg.git}" ffmpeg
 	fi
 fi
@@ -135,7 +135,7 @@ if [ ! -d libass ]; then
 			"${LIBASS_GIT_URL:-https://github.com/libass/libass}" \
 			"$LIBASS_GIT_COMMIT" libass
 	else
-		git clone --branch "$v_ci_libass" \
+		git clone --depth 1 --branch "$v_ci_libass" \
 			"${LIBASS_GIT_URL:-https://github.com/libass/libass}" libass
 	fi
 fi
@@ -243,13 +243,13 @@ if [ ! -d libplacebo ]; then
 			"${LIBPLACEBO_GIT_URL:-https://github.com/haasn/libplacebo.git}" \
 			"$LIBPLACEBO_GIT_COMMIT" libplacebo recursive
 	else
-		git clone --recursive --branch "$v_ci_libplacebo" \
+		git clone --depth 1 --recursive --branch "$v_ci_libplacebo" \
 			"${LIBPLACEBO_GIT_URL:-https://github.com/haasn/libplacebo.git}" libplacebo
 	fi
 fi
 
 # mpv
-[ ! -d mpv ] && git clone -b fongmi https://github.com/FongMi/mpv.git
+[ ! -d mpv ] && git clone --depth 1 -b fongmi https://github.com/FongMi/mpv.git
 if ! git -C mpv apply --reverse --check ../../patches/mpv_video_shaders.patch 2>/dev/null; then
 	git -C mpv apply ../../patches/mpv_video_shaders.patch
 fi
