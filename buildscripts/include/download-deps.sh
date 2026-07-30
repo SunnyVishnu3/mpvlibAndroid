@@ -87,7 +87,8 @@ fi
 # freetype2
 if [ ! -d freetype2 ]; then
 	mkdir freetype2
-	$WGET https://download.savannah.gnu.org/releases/freetype/freetype-$v_freetype.tar.gz -O - | \
+	{ $WGET https://downloads.sourceforge.net/freetype/freetype-$v_freetype.tar.gz -O - || \
+	  $WGET https://download.savannah.gnu.org/releases/freetype/freetype-$v_freetype.tar.gz -O - ; } | \
 		tar -xz -C freetype2 --strip-components=1
 fi
 
