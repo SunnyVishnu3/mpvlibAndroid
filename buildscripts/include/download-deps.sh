@@ -24,6 +24,31 @@ download_extract() {
 	mv "$temporary" "$destination"
 }
 
+clone_ci_commit() {
+	local repository=$1
+	local expected_commit=$2
+	local directory=$3
+	local clone_mode=${4:-}
+
+	if ! (
+		set -e
+		git init -q "$directory"
+		git -C "$directory" remote add origin "$repository"
+		git -C "$directory" fetch -q --depth=1 origin "$expected_commit"
+		git -C "$directory" checkout -q --detach FETCH_HEAD
+		if [[ "$clone_mode" == recursive ]]; then
+			git -C "$directory" submodule update -q \
+				--init --recursive --depth=1
+		fi
+		[[ $(git -C "$directory" rev-parse --verify 'HEAD^{commit}') == \
+			"$expected_commit" ]]
+	); then
+		echo "Failed to check out $repository commit $expected_commit." >&2
+		rm -rf "$directory"
+		return 1
+	fi
+}
+
 # mbedtls - use git clone with correct directory structure
 if [ ! -d mbedtls ]; then
 	git clone --depth 1 --branch mbedtls-$v_mbedtls https://github.com/Mbed-TLS/mbedtls.git mbedtls-tmp
