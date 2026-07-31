@@ -24,31 +24,6 @@ download_extract() {
 	mv "$temporary" "$destination"
 }
 
-clone_ci_commit() {
-	local repository=$1
-	local expected_commit=$2
-	local directory=$3
-	local clone_mode=${4:-}
-
-	if ! (
-		set -e
-		git init -q "$directory"
-		git -C "$directory" remote add origin "$repository"
-		git -C "$directory" fetch -q --depth=1 origin "$expected_commit"
-		git -C "$directory" checkout -q --detach FETCH_HEAD
-		if [[ "$clone_mode" == recursive ]]; then
-			git -C "$directory" submodule update -q \
-				--init --recursive --depth=1
-		fi
-		[[ $(git -C "$directory" rev-parse --verify 'HEAD^{commit}') == \
-			"$expected_commit" ]]
-	); then
-		echo "Failed to check out $repository commit $expected_commit." >&2
-		rm -rf "$directory"
-		return 1
-	fi
-}
-
 # mbedtls - use git clone with correct directory structure
 if [ ! -d mbedtls ]; then
 	git clone --depth 1 --branch mbedtls-$v_mbedtls https://github.com/Mbed-TLS/mbedtls.git mbedtls-tmp
@@ -57,38 +32,19 @@ if [ ! -d mbedtls ]; then
 	git -C mbedtls submodule update --init --recursive
 fi
 
-# dav1d
-if [ ! -d dav1d ]; then
-	if [ "$IN_CI" -eq 1 ]; then
-		: "${DAV1D_GIT_COMMIT:?DAV1D_GIT_COMMIT must be set in CI}"
-		clone_ci_commit \
-			"${DAV1D_GIT_URL:-https://github.com/videolan/dav1d}" \
-			"$DAV1D_GIT_COMMIT" dav1d
-	else
-		git clone --depth 1 --branch "$v_ci_dav1d" \
-			"${DAV1D_GIT_URL:-https://github.com/videolan/dav1d}" dav1d
-	fi
-fi
+# dav1d (canonical repo, GitHub is read-only mirror)
+[ ! -d dav1d ] && git clone https://github.com/videolan/dav1d
 
 # ffmpeg (using FongMI fork which has av_mediacodec_get_buffer_timestamp)
 if [ ! -d ffmpeg ]; then
-	if [ "$IN_CI" -eq 1 ]; then
-		: "${FFMPEG_GIT_COMMIT:?FFMPEG_GIT_COMMIT must be set in CI}"
-		clone_ci_commit \
-			"${FFMPEG_GIT_URL:-https://github.com/FongMi/FFmpeg.git}" \
-			"$FFMPEG_GIT_COMMIT" ffmpeg
-	else
-		git clone --depth 1 --branch "$v_ci_ffmpeg" \
-			"${FFMPEG_GIT_URL:-https://github.com/FongMi/FFmpeg.git}" ffmpeg
-	fi
+	git clone --branch release-8.1-fongmi https://github.com/FongMi/FFmpeg.git ffmpeg
 fi
 
 
 # freetype2
 if [ ! -d freetype2 ]; then
 	mkdir freetype2
-	{ $WGET https://downloads.sourceforge.net/freetype/freetype-$v_freetype.tar.gz -O - || \
-	  $WGET https://download.savannah.gnu.org/releases/freetype/freetype-$v_freetype.tar.gz -O - ; } | \
+	$WGET https://download.savannah.gnu.org/releases/freetype/freetype-$v_freetype.tar.gz -O - | \
 		tar -xz -C freetype2 --strip-components=1
 fi
 
@@ -127,18 +83,8 @@ if [ ! -d unibreak ]; then
 		tar -xz -C unibreak --strip-components=1
 fi
 
-# libass
-if [ ! -d libass ]; then
-	if [ "$IN_CI" -eq 1 ]; then
-		: "${LIBASS_GIT_COMMIT:?LIBASS_GIT_COMMIT must be set in CI}"
-		clone_ci_commit \
-			"${LIBASS_GIT_URL:-https://github.com/libass/libass}" \
-			"$LIBASS_GIT_COMMIT" libass
-	else
-		git clone --depth 1 --branch "$v_ci_libass" \
-			"${LIBASS_GIT_URL:-https://github.com/libass/libass}" libass
-	fi
-fi
+# libass - use GitHub mirror
+[ ! -d libass ] && git clone https://github.com/libass/libass
 
 # lua - use 5.2.x (mpv requires < 5.3)
 if [ ! -d lua ]; then
@@ -240,16 +186,15 @@ if [ ! -d libplacebo ]; then
 	if [ "$IN_CI" -eq 1 ]; then
 		: "${LIBPLACEBO_GIT_COMMIT:?LIBPLACEBO_GIT_COMMIT must be set in CI}"
 		clone_ci_commit \
-			"${LIBPLACEBO_GIT_URL:-https://github.com/haasn/libplacebo.git}" \
+			"${LIBPLACEBO_GIT_URL:-https://github.com/FongMi/libplacebo.git}" \
 			"$LIBPLACEBO_GIT_COMMIT" libplacebo recursive
 	else
 		git clone --depth 1 --recursive --branch "$v_ci_libplacebo" \
-			"${LIBPLACEBO_GIT_URL:-https://github.com/haasn/libplacebo.git}" libplacebo
+			"${LIBPLACEBO_GIT_URL:-https://github.com/FongMi/libplacebo.git}" libplacebo
 	fi
 fi
-
 # mpv
-[ ! -d mpv ] && git clone --depth 1 -b fongmi https://github.com/FongMi/mpv.git
+[ ! -d mpv ] && git clone -b fongmi https://github.com/FongMi/mpv.git
 if ! git -C mpv apply --reverse --check ../../patches/mpv_video_shaders.patch 2>/dev/null; then
 	git -C mpv apply ../../patches/mpv_video_shaders.patch
 fi

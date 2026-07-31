@@ -24,7 +24,7 @@ msg() {
 ffmpeg_repository=${FFMPEG_GIT_URL:-https://github.com/FongMi/FFmpeg.git}
 dav1d_repository=${DAV1D_GIT_URL:-https://github.com/videolan/dav1d}
 libass_repository=${LIBASS_GIT_URL:-https://github.com/libass/libass}
-libplacebo_repository=${LIBPLACEBO_GIT_URL:-https://github.com/haasn/libplacebo.git}
+libplacebo_repository=${LIBPLACEBO_GIT_URL:-https://github.com/FongMi/libplacebo.git}
 
 resolve_ci_commit() {
 	local configured_commit=$1
