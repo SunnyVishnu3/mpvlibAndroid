@@ -43,44 +43,40 @@ fi
 
 # freetype2
 if [ ! -d freetype2 ]; then
-	mkdir freetype2
-	$WGET https://download.savannah.gnu.org/releases/freetype/freetype-$v_freetype.tar.gz -O - | \
-		tar -xz -C freetype2 --strip-components=1
+	download_extract freetype2 \
+		https://downloads.sourceforge.net/freetype/freetype-$v_freetype.tar.gz -xz || \
+	download_extract freetype2 \
+		https://download.savannah.gnu.org/releases/freetype/freetype-$v_freetype.tar.gz -xz
 fi
 
 # libaribcaption
 if [ ! -d libaribcaption ]; then
-	mkdir libaribcaption
-	$WGET https://github.com/xqq/libaribcaption/archive/refs/tags/v${v_libaribcaption}.tar.gz -O - | \
-		tar -xz -C libaribcaption --strip-components=1
+	download_extract libaribcaption \
+		https://github.com/xqq/libaribcaption/archive/refs/tags/v${v_libaribcaption}.tar.gz -xz
 fi
 
 # libxml2
 if [ ! -d libxml2 ]; then
-	mkdir libxml2
-	$WGET https://gitlab.gnome.org/GNOME/libxml2/-/archive/v${v_libxml2}/libxml2-v${v_libxml2}.tar.gz -O - | \
-		tar -xz -C libxml2 --strip-components=1
+	download_extract libxml2 \
+		https://gitlab.gnome.org/GNOME/libxml2/-/archive/v${v_libxml2}/libxml2-v${v_libxml2}.tar.gz -xz
 fi
 
 # fribidi - use vX.Y.Z tag format for releases
 if [ ! -d fribidi ]; then
-	mkdir fribidi
-	$WGET https://github.com/fribidi/fribidi/releases/download/v$v_fribidi/fribidi-$v_fribidi.tar.xz -O - | \
-		tar -xJ -C fribidi --strip-components=1
+	download_extract fribidi \
+		https://github.com/fribidi/fribidi/releases/download/v$v_fribidi/fribidi-$v_fribidi.tar.xz -xJ
 fi
 
 # harfbuzz
 if [ ! -d harfbuzz ]; then
-	mkdir harfbuzz
-	$WGET https://github.com/harfbuzz/harfbuzz/releases/download/$v_harfbuzz/harfbuzz-$v_harfbuzz.tar.xz -O - | \
-		tar -xJ -C harfbuzz --strip-components=1
+	download_extract harfbuzz \
+		https://github.com/harfbuzz/harfbuzz/releases/download/$v_harfbuzz/harfbuzz-$v_harfbuzz.tar.xz -xJ
 fi
 
 # unibreak
 if [ ! -d unibreak ]; then
-	mkdir unibreak
-	$WGET https://github.com/adah1972/libunibreak/releases/download/libunibreak_${v_unibreak//./_}/libunibreak-${v_unibreak}.tar.gz -O - | \
-		tar -xz -C unibreak --strip-components=1
+	download_extract unibreak \
+		https://github.com/adah1972/libunibreak/releases/download/libunibreak_${v_unibreak//./_}/libunibreak-${v_unibreak}.tar.gz -xz
 fi
 
 # libass - use GitHub mirror
@@ -88,23 +84,20 @@ fi
 
 # lua - use 5.2.x (mpv requires < 5.3)
 if [ ! -d lua ]; then
-	mkdir lua
-	$WGET https://www.lua.org/ftp/lua-$v_lua.tar.gz -O - | \
-		tar -xz -C lua --strip-components=1
+	download_extract lua \
+		https://www.lua.org/ftp/lua-$v_lua.tar.gz -xz
 fi
 
 # mujs
 if [ ! -d mujs ]; then
-	mkdir mujs
-	$WGET https://mujs.com/downloads/mujs-$v_mujs.tar.gz -O - | \
-		tar -xz -C mujs --strip-components=1
+	download_extract mujs \
+		https://mujs.com/downloads/mujs-$v_mujs.tar.gz -xz
 fi
 
 # openssl
 if [ ! -d openssl ]; then
-	mkdir openssl
-	$WGET https://github.com/openssl/openssl/releases/download/openssl-$v_openssl/openssl-$v_openssl.tar.gz -O - | \
-		tar -xz -C openssl --strip-components=1
+	download_extract openssl \
+		https://github.com/openssl/openssl/releases/download/openssl-$v_openssl/openssl-$v_openssl.tar.gz -xz
 fi
 
 # libbluray
@@ -169,9 +162,8 @@ fi
 
 # curl
 if [ ! -d curl ]; then
-	mkdir curl
-	$WGET https://curl.se/download/curl-$v_curl.tar.gz -O - | \
-		tar -xz -C curl --strip-components=1
+	download_extract curl \
+		https://curl.se/download/curl-$v_curl.tar.gz -xz
 fi
 
 # shaderc
