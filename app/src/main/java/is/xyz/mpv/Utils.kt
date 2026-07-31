@@ -354,7 +354,7 @@ object Utils {
         mpv = "%MPV_VERSION%-FongMI",
         mpvClientApi = "%MPV_CLIENT_API_VERSION%",
         buildDate = "%DATE%",
-        libPlacebo = "%LIBPLACEBO_VERSION%",
+        libPlacebo = "%LIBPLACEBO_VERSION%-FongMI",
         ffmpeg = "%FFMPEG_VERSION%-FongMI",
         libAvcodec = "%LIBAVCODEC_VERSION%",
         libAss = "%LIBASS_VERSION%",
