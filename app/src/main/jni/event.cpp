@@ -6,6 +6,7 @@
 #include "jni_utils.h"
 #include "log.h"
 #include "node.h"
+#include "render.h"
 
 static void sendPropertyUpdateToJava(JNIEnv *env, mpv_event_property *prop)
 {
@@ -148,6 +149,10 @@ void *event_thread(void *arg)
         case MPV_EVENT_PROPERTY_CHANGE:
             mp_property = (mpv_event_property*)mp_event->data;
             sendPropertyUpdateToJava(env, mp_property);
+            break;
+        case MPV_EVENT_SET_PROPERTY_REPLY:
+            if (!handle_property_update_reply(env, mp_event))
+                sendEventToJava(env, mp_event->event_id, nullptr);
             break;
         case MPV_EVENT_END_FILE:
             ALOGV("event: %s\n", mpv_event_name(mp_event->event_id));

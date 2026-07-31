@@ -69,6 +69,7 @@ object MPVLib {
         setPropertyStringResult(property, value)
     }
     external fun setPropertyStringResult(property: String, value: String): Int
+    external fun setPropertyStringAsync(property: String, value: String): Int
     external fun getPropertyByteArray(property: String): ByteArray?
     external fun getPropertyNode(property: String): MPVNode?
     fun setPropertyNode(property: String, node: MPVNode) {

@@ -22,6 +22,7 @@ if [[ "$ndk_triple" == "i686"* ]]; then
 else
 	./scripts/config.py set MBEDTLS_AESNI_C
 fi
+./scripts/config.py set MBEDTLS_PLATFORM_DEV_RANDOM '"/dev/urandom"'
 
 mkdir -p _build$ndk_suffix
 cd _build$ndk_suffix

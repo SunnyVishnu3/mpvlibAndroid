@@ -56,7 +56,7 @@ static void destroy_failed_mpv_context(JNIEnv *env)
     mpv_terminate_destroy(handle);
     finish_mpv_destroy();
     mpv_initialized = false;
-    release_surface_reference(env);
+    release_surface_references(env);
 }
 
 static bool prepare_environment(JNIEnv *env, jobject appctx) {
@@ -179,7 +179,7 @@ jni_func(void, destroy) {
     mpv_terminate_destroy(handle);
     lifecycle_lock.lock();
     mpv_initialized = false;
-    release_surface_reference(env);
+    release_surface_references(env);
     finish_mpv_destroy();
 }
 
