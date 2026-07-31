@@ -15,7 +15,7 @@ if [ "$os" == "linux" ]; then
 		elif apt-get -v &>/dev/null; then
 			sudo apt-get install -y autoconf cmake pkg-config libtool ninja-build \
 				unzip wget meson  python3  nasm
-			sudo pip3 install --break-system-packages meson || true
+			sudo pip3 install meson
 		else
 			echo "Note: dependencies were not installed, you have to do that manually."
 		fi
