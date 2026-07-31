@@ -68,6 +68,19 @@ include $(CLEAR_VARS)
 LOCAL_MODULE    := libplayer
 LOCAL_CFLAGS    := -Werror
 LOCAL_CPPFLAGS  += -std=c++17
+
+ifeq ($(TARGET_ARCH_ABI),arm64-v8a)
+LOCAL_CFLAGS   += -O3 -march=armv8.2-a+crypto+dotprod+fp16+i8mm+bf16+sha3 \
+                  -mtune=cortex-x4 \
+                  -fno-math-errno -fno-trapping-math -ffp-contract=fast \
+                  -fomit-frame-pointer -pipe \
+                  -ffunction-sections -fdata-sections \
+                  -fno-plt
+LOCAL_CPPFLAGS += -fno-exceptions -fno-rtti
+LOCAL_LDFLAGS  += -Wl,--gc-sections,--icf=safe,--as-needed \
+                  -Wl,-z,now,-z,relro
+endif
+
 LOCAL_SRC_FILES := \
 	main.cpp \
 	render.cpp \
