@@ -86,7 +86,7 @@ patch_mpv_iconv_dependency
 meson setup $build --cross-file "$prefix_dir"/crossfile.txt \
 	--default-library shared \
 	-D{iconv,uchardet}=enabled \
-	-D{libarchive,dvdnav}=enabled \
+	-Dlibarchive=disabled -Ddvdnav=enabled \
 	-D{lua,libcurl,rubberband}=enabled \
 	-Djavascript=enabled \
 	-Dlibmpv=true -Dcplayer=false \

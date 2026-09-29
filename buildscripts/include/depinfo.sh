@@ -23,10 +23,6 @@ v_curl=8.21.0
 v_libbluray=1.4.1
 v_libiconv=1.19
 v_uchardet=0.0.8
-v_bzip2=1.0.8
-v_xz=5.8.1
-v_zstd=1.5.7
-v_libarchive=3.8.7
 v_libdvdread=7.0.1
 v_libdvdnav=7.0.0
 v_rubberband=4.0.0
@@ -37,9 +33,6 @@ v_rubberband=4.0.0
 
 dep_libiconv=()
 dep_uchardet=(libiconv)
-dep_bzip2=()
-dep_xz=()
-dep_zstd=()
 dep_mbedtls=()
 dep_dav1d=()
 dep_libxml2=()
@@ -57,11 +50,10 @@ dep_shaderc=()
 dep_libplacebo=(shaderc)
 dep_curl=(mbedtls)
 dep_libbluray=()
-dep_libarchive=(libiconv bzip2 xz zstd)
 dep_libdvdread=()
 dep_libdvdnav=(libdvdread)
 dep_rubberband=()
-dep_mpv=(ffmpeg libass lua libplacebo curl libbluray libiconv uchardet libarchive libdvdnav rubberband mujs)
+dep_mpv=(ffmpeg libass lua libplacebo curl libbluray libiconv uchardet libdvdnav rubberband mujs)
 dep_mpv_android=(mpv)
 
 
@@ -71,4 +63,4 @@ dep_mpv_android=(mpv)
 v_ci_ffmpeg=n9.0
 
 # filename used to uniquely identify a build prefix
-ci_tarball="prefix-ndk-${v_ndk}-lua-${v_lua}-mujs-${v_mujs}-unibreak-${v_unibreak}-harfbuzz-${v_harfbuzz}-fribidi-${v_fribidi}-freetype-${v_freetype}-libxml2-${v_libxml2}-libaribcaption-${v_libaribcaption}-mbedtls-${v_mbedtls}-curl-${v_curl}-libbluray-${v_libbluray}-libiconv-${v_libiconv}-uchardet-${v_uchardet}-bzip2-${v_bzip2}-xz-${v_xz}-zstd-${v_zstd}-libarchive-${v_libarchive}-libdvdread-${v_libdvdread}-libdvdnav-${v_libdvdnav}-rubberband-${v_rubberband}-openssl-${v_openssl}-ffmpeg-${v_ci_ffmpeg}.tgz"
+ci_tarball="prefix-ndk-${v_ndk}-lua-${v_lua}-mujs-${v_mujs}-unibreak-${v_unibreak}-harfbuzz-${v_harfbuzz}-fribidi-${v_fribidi}-freetype-${v_freetype}-libxml2-${v_libxml2}-libaribcaption-${v_libaribcaption}-mbedtls-${v_mbedtls}-curl-${v_curl}-libbluray-${v_libbluray}-libiconv-${v_libiconv}-uchardet-${v_uchardet}-libdvdread-${v_libdvdread}-libdvdnav-${v_libdvdnav}-rubberband-${v_rubberband}-openssl-${v_openssl}-ffmpeg-${v_ci_ffmpeg}.tgz"

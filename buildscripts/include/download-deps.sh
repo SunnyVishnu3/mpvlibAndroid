@@ -94,34 +94,6 @@ if [ ! -d uchardet ]; then
 		tar -xz -C uchardet --strip-components=1
 fi
 
-# bzip2
-if [ ! -d bzip2 ]; then
-	mkdir bzip2
-	$WGET https://sourceware.org/pub/bzip2/bzip2-${v_bzip2}.tar.gz -O - | \
-		tar -xz -C bzip2 --strip-components=1
-fi
-
-# xz
-if [ ! -d xz ]; then
-	mkdir xz
-	$WGET https://github.com/tukaani-project/xz/releases/download/v${v_xz}/xz-${v_xz}.tar.xz -O - | \
-		tar -xJ -C xz --strip-components=1
-fi
-
-# zstd
-if [ ! -d zstd ]; then
-	mkdir zstd
-	$WGET https://github.com/facebook/zstd/releases/download/v${v_zstd}/zstd-${v_zstd}.tar.gz -O - | \
-		tar -xz -C zstd --strip-components=1
-fi
-
-# libarchive
-if [ ! -d libarchive ]; then
-	mkdir libarchive
-	$WGET https://github.com/libarchive/libarchive/releases/download/v${v_libarchive}/libarchive-${v_libarchive}.tar.xz -O - | \
-		tar -xJ -C libarchive --strip-components=1
-fi
-
 # libdvdread
 if [ ! -d libdvdread ]; then
 	mkdir libdvdread
