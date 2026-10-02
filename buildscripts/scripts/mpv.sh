@@ -47,6 +47,10 @@ if ! git apply --reverse --check ../../patches/mpv_lsfg_layer.patch 2>/dev/null;
 	git apply ../../patches/mpv_lsfg_layer.patch
 fi
 
+if ! git apply --reverse --check ../../patches/mpv_smoovie_memc.patch 2>/dev/null; then
+	git apply ../../patches/mpv_smoovie_memc.patch
+fi
+
 unset CC CXX # meson wants these unset
 
 check_iconv_files

@@ -1,0 +1,944 @@
+diff --git a/filters/user_filters.c b/filters/user_filters.c
+index ea7b69c990..ab89051582 100644
+--- a/filters/user_filters.c
++++ b/filters/user_filters.c
+@@ -42,6 +42,7 @@ const struct mp_user_filter_entry *af_list[] = {
+ #endif
+     &af_lavcac3enc,
+     &af_drop,
++    &af_smoovie,
+ };
+ 
+ static bool get_af_desc(struct m_obj_desc *dst, int index)
+@@ -86,6 +87,7 @@ const struct mp_user_filter_entry *vf_list[] = {
+     &vf_lavfi,
+     &vf_lavfi_bridge,
+     &vf_sub,
++    &vf_smoovie,
+ #if HAVE_ZIMG
+     &vf_fingerprint,
+ #endif
+diff --git a/filters/user_filters.h b/filters/user_filters.h
+index f2c31ef66b..f39d496e13 100644
+--- a/filters/user_filters.h
++++ b/filters/user_filters.h
+@@ -27,6 +27,7 @@ extern const struct mp_user_filter_entry af_format;
+ extern const struct mp_user_filter_entry af_rubberband;
+ extern const struct mp_user_filter_entry af_lavcac3enc;
+ extern const struct mp_user_filter_entry af_drop;
++extern const struct mp_user_filter_entry af_smoovie;
+ 
+ extern const struct mp_user_filter_entry vf_lavfi;
+ extern const struct mp_user_filter_entry vf_lavfi_bridge;
+@@ -39,3 +40,4 @@ extern const struct mp_user_filter_entry vf_d3d11vpp;
+ extern const struct mp_user_filter_entry vf_amf_frc;
+ extern const struct mp_user_filter_entry vf_fingerprint;
+ extern const struct mp_user_filter_entry vf_gpu;
++extern const struct mp_user_filter_entry vf_smoovie;
+diff --git a/meson.build b/meson.build
+index 2bdb9a9c0f..18e8375167 100644
+--- a/meson.build
++++ b/meson.build
+@@ -64,6 +64,7 @@ sources = files(
+     'audio/decode/ad_lavc.c',
+     'audio/decode/ad_spdif.c',
+     'audio/filter/af_drop.c',
++    'audio/filter/af_smoovie.c',
+     'audio/filter/af_format.c',
+     'audio/filter/af_lavcac3enc.c',
+     'audio/filter/af_lavfi_tempo.c',
+@@ -224,6 +225,7 @@ sources = files(
+     'video/decode/vd_lavc.c',
+     'video/filter/refqueue.c',
+     'video/filter/vf_format.c',
++    'video/filter/vf_smoovie.c',
+     'video/filter/vf_sub.c',
+     'video/fmt-conversion.c',
+     'video/hwdec.c',
+diff --git a/audio/filter/af_smoovie.c b/audio/filter/af_smoovie.c
+new file mode 100755
+index 0000000000..a107a02186
+--- /dev/null
++++ b/audio/filter/af_smoovie.c
+@@ -0,0 +1,191 @@
++// Smoovie's audio tap: a PASSTHROUGH audio filter that hands a copy of the PCM to
++// libsmoovie_native for analysis (FFT / beat detection driving the visualizers).
++//
++// Why this exists at all: nothing in mpv exposes decoded PCM to the app. The
++// alternatives were android.media.audiofx.Visualizer — capped at 1024 bytes of 8-bit
++// magnitude, far too coarse, and needing an AudioTrack session id mpv never surfaces —
++// or decoding the stream a second time in parallel and trying to keep it in sync. A
++// filter sitting in the real chain is the only thing that sees the real samples at the
++// real time.
++//
++// The structure deliberately mirrors vf_smoovie: this file is the ONLY thing that must
++// live inside the mpv tree, and it dlopen/dlsym's the engine rather than linking it. So
++// all later visualizer work is a plain libsmoovie_native rebuild — mpv itself is rebuilt
++// once and then left alone.
++//
++// Placement: the app appends this at the END of the `af` chain, so it observes audio
++// AFTER the equalizer — what the visualizer draws is what you actually hear.
++//
++// Hard rules, because this runs on the audio thread:
++//   - Never block. The push is a lock-free ring write in the engine.
++//   - Never modify or hold the frame. It is passed straight through untouched.
++//   - Absent engine => pure passthrough. A missing symbol must cost nothing and must
++//     never break playback.
++
++#include <dlfcn.h>
++#include <stdbool.h>
++#include <stdint.h>
++
++#include "audio/aframe.h"
++#include "audio/format.h"
++#include "common/common.h"
++#include "filters/filter_internal.h"
++#include "filters/user_filters.h"
++
++// Implemented in libsmoovie_native (cpp/audio/AudioTap.cpp). Interleaved or planar is
++// resolved here; the engine only ever sees interleaved float.
++typedef void (*audio_push_fn)(const float *samples, int nsamples, int channels,
++                              int rate, double pts);
++
++struct priv {
++    void *lib;
++    audio_push_fn push;
++    bool warned;
++    // Scratch for de-planarizing. Grown on demand, never per frame.
++    float *ilv;
++    int ilv_cap;
++};
++
++static void load_engine(struct mp_filter *f)
++{
++    struct priv *p = f->priv;
++
++    // Same two-step as vf_smoovie: an explicit handle first, because RTLD_DEFAULT from
++    // inside libmpv cannot see libsmoovie_native across Android's linker namespaces.
++    p->lib = dlopen("libsmoovie_native.so", RTLD_NOW | RTLD_LOCAL);
++    if (p->lib)
++        p->push = (audio_push_fn) dlsym(p->lib, "smoovie_audio_push");
++
++    // Fallback: the app loads libsmoovie_native at startup, so the symbol may already be
++    // in the process.
++    if (!p->push)
++        p->push = (audio_push_fn) dlsym(RTLD_DEFAULT, "smoovie_audio_push");
++
++    if (p->push)
++        MP_INFO(f, "smoovie: audio tap attached\n");
++    else
++        MP_WARN(f, "smoovie: audio tap unavailable; PASSTHROUGH only\n");
++}
++
++// Hand one frame's samples to the engine. Best-effort: any format we don't understand is
++// skipped silently rather than guessed at — feeding the FFT misinterpreted bytes would
++// produce a visualizer that reacts confidently to nothing.
++static void tap(struct mp_filter *f, struct mp_aframe *fr)
++{
++    struct priv *p = f->priv;
++    if (!p->push)
++        return;
++
++    int format = mp_aframe_get_format(fr);
++    int samples = mp_aframe_get_size(fr);        // per channel
++    int channels = mp_aframe_get_channels(fr);
++    int rate = mp_aframe_get_rate(fr);
++    if (samples <= 0 || channels <= 0 || rate <= 0)
++        return;
++
++    uint8_t **data = mp_aframe_get_data_ro(fr);
++    if (!data)
++        return;
++
++    if (format == AF_FORMAT_FLOAT) {
++        // Already interleaved — the common case, and the whole point of the fast path.
++        p->push((const float *) data[0], samples, channels, rate, mp_aframe_get_pts(fr));
++        return;
++    }
++
++    if (format == AF_FORMAT_FLOATP) {
++        int need = samples * channels;
++        if (need > p->ilv_cap) {
++            // talloc against the filter, so it dies with the filter and never leaks.
++            p->ilv = talloc_realloc(p, p->ilv, float, need);
++            p->ilv_cap = p->ilv ? need : 0;
++        }
++        if (!p->ilv)
++            return;
++        for (int c = 0; c < channels; c++) {
++            const float *src = (const float *) data[c];
++            if (!src)
++                return;
++            for (int i = 0; i < samples; i++)
++                p->ilv[i * channels + c] = src[i];
++        }
++        p->push(p->ilv, samples, channels, rate, mp_aframe_get_pts(fr));
++        return;
++    }
++
++    if (!p->warned) {
++        p->warned = true;
++        MP_VERBOSE(f, "smoovie: audio tap skipping format %d (want float)\n", format);
++    }
++}
++
++static void af_smoovie_process(struct mp_filter *f)
++{
++    if (!mp_pin_in_needs_data(f->ppins[1]))
++        return;
++
++    struct mp_frame frame = mp_pin_out_read(f->ppins[0]);
++    if (frame.type == MP_FRAME_NONE)
++        return;
++
++    if (frame.type == MP_FRAME_AUDIO)
++        tap(f, frame.data);
++
++    // Passthrough, always and unconditionally — the frame is forwarded whatever the tap
++    // did or didn't manage.
++    mp_pin_in_write(f->ppins[1], frame);
++}
++
++static void af_smoovie_reset(struct mp_filter *f)
++{
++    struct priv *p = f->priv;
++    // A seek invalidates whatever the analyser had buffered; a null push tells the engine
++    // to clear its ring so the visualizer doesn't briefly replay pre-seek audio.
++    if (p->push)
++        p->push(NULL, 0, 0, 0, 0.0);
++}
++
++static void af_smoovie_destroy(struct mp_filter *f)
++{
++    struct priv *p = f->priv;
++    if (p->push)
++        p->push(NULL, 0, 0, 0, 0.0);
++    p->push = NULL;
++    // The handle is deliberately NOT dlclose()d: the engine owns process-wide state
++    // (the same reason the app never nativeDestroy()s mpv), and unloading it under a
++    // live app would be a use-after-free waiting to happen.
++    p->lib = NULL;
++}
++
++static const struct mp_filter_info af_smoovie_filter = {
++    .name = "smoovie",
++    .priv_size = sizeof(struct priv),
++    .process = af_smoovie_process,
++    .reset = af_smoovie_reset,
++    .destroy = af_smoovie_destroy,
++};
++
++static struct mp_filter *af_smoovie_create(struct mp_filter *parent, void *options)
++{
++    struct mp_filter *f = mp_filter_create(parent, &af_smoovie_filter);
++    if (!f) {
++        talloc_free(options);
++        return NULL;
++    }
++
++    mp_filter_add_pin(f, MP_PIN_IN, "in");
++    mp_filter_add_pin(f, MP_PIN_OUT, "out");
++
++    talloc_free(options);
++    load_engine(f);
++    return f;
++}
++
++const struct mp_user_filter_entry af_smoovie = {
++    .desc = {
++        .description = "Smoovie audio tap (passthrough; feeds the visualizers)",
++        .name = "smoovie",
++        .priv_size = sizeof(struct priv),
++    },
++    .create = af_smoovie_create,
++};
+diff --git a/video/filter/vf_smoovie.c b/video/filter/vf_smoovie.c
+new file mode 100755
+index 0000000000..5f76064813
+--- /dev/null
++++ b/video/filter/vf_smoovie.c
+@@ -0,0 +1,684 @@
++// Smoovie MEMC frame-rate-conversion filter.
++//
++// Generates motion-compensated frames on a fixed output clock (target fps) and
++// rewrites PTS, so mpv's normal A/V sync + display path outputs at a higher
++// rate. The interpolation lives in libsmoovie_native.so (dlopen'd) so the
++// algorithm can evolve without rebuilding mpv.
++//
++// Usage: --vf=smoovie:fps=90
++#include <dlfcn.h>
++#include <math.h>
++#include <stdlib.h>
++#include <string.h>
++
++
++#include <libavutil/frame.h>
++#include <libavutil/motion_vector.h>
++
++#include "common/common.h"
++#include "common/msg.h"
++#include "filters/f_autoconvert.h"
++#include "filters/filter.h"
++#include "filters/filter_internal.h"
++#include "filters/user_filters.h"
++#include "video/img_format.h"
++#include "video/mp_image.h"
++#include "options/m_option.h"
++
++typedef void *(*memc_create_fn)(void);
++typedef void (*memc_configure_fn)(void *, int, int, int, int, int);
++typedef void (*memc_interpolate_fn)(
++        void *, const uint8_t *, const uint8_t *, const uint8_t *, int, int,
++        const uint8_t *, const uint8_t *, const uint8_t *, int, int, float,
++        uint8_t *, uint8_t *, uint8_t *, int, int, int, int);
++// SVP-style batch: one estimate + n warps for a source pair in a single GPU
++// submit. Optional symbol (older engines lack it) — falls back to lazy interp.
++typedef void (*memc_interpolate_pair_fn)(
++        void *, const uint8_t *, const uint8_t *, const uint8_t *, int, int,
++        const uint8_t *, const uint8_t *, const uint8_t *, int, int,
++        const float *, int,
++        uint8_t *const *, uint8_t *const *, uint8_t *const *,
++        const int *, const int *, int, int);
++typedef void (*memc_destroy_fn)(void *);
++// Option B: when our Vulkan presenter owns the Surface (mpv vo=null), feed each
++// decoded frame to it and pass through — no interpolation here, no readback.
++typedef int (*present_active_fn)(void);
++typedef void (*present_frame_fn)(const uint8_t *, const uint8_t *, const uint8_t *,
++                                 int, int, int, int);
++// Stage 3: feed a source PAIR + the interpolation grid; the engine estimates
++// once, warps every t to an RGBA image, and presents each straight to the
++// swapchain (zero readback). Returns frames presented (0 => fall back).
++typedef int (*present_pair_fn)(const uint8_t *, const uint8_t *, const uint8_t *,
++                               int, int,
++                               const uint8_t *, const uint8_t *, const uint8_t *,
++                               int, int,
++                               const float *, int, int, int);
++// Track B: stage decoder block MVs (6 ints each: dst_x,dst_y,bw,bh,mvx,mvy full-pel)
++// as a coarse seed for the NEXT present_pair's estimate. Optional symbol.
++typedef void (*present_set_mv_seed_fn)(const int *, int);
++// Lipsync measurement: stage the MEDIA pts of the next present_pair's output
++// grid (one double per interpolated frame) plus the source frame's pts (used by
++// the passthrough/fallback present_frame). The presenter compares the pts of
++// the frame actually reaching the glass against mpv's live audio-pts — the true
++// audio->screen offset our pipeline creates, which mpv itself cannot see with
++// vo=null. Optional symbol (older engines just skip measurement).
++typedef void (*present_set_pts_fn)(const double *, int, double);
++// Seek/flush: drop every buffered PRE-seek pair so the presenter doesn't drain
++// stale content for seconds after a scrub (which back-pressures this filter and
++// stalls the playloop -> audio AND video lag). Optional symbol.
++typedef void (*present_flush_fn)(void);
++
++// Max interpolated frames rendered per source pair in one batch. Must not exceed
++// the engine's kMaxBatch (6). For 60fps from 24fps source this is ~3.
++#define SMOOVIE_MAX_BATCH 6
++
++struct smoovie_opts {
++    double fps;
++};
++
++// One pending output. Either a ready frame (img != NULL: passthrough / the real
++// source frame at a batch's tail) or a lazy interpolation descriptor (img ==
++// NULL) that is rendered on demand when it is actually pulled. Rendering lazily
++// is what keeps each process() call short: we block the playloop for a single
++// ~9.5ms interp instead of the whole ~63ms batch.
++struct out_item {
++    struct mp_image *img;  // ready frame (owns a ref); NULL => render lazily
++    float t;               // interp position in (0,1) when img == NULL
++    double pts;
++};
++
++struct priv {
++    struct smoovie_opts *opts;
++    struct mp_autoconvert *conv;
++
++    struct mp_image *prev;         // left-edge source held for the *next* pair
++    struct mp_image *render_left;  // left source (a) of the batch currently draining
++    struct mp_image *render_right; // right source (b) of the batch currently draining
++    struct out_item queue[24];     // pending outputs (interp slots rendered lazily)
++    int qlen, qpos;
++    double next_pts;             // fixed output clock
++    bool clock_init;
++    int64_t batches;
++    int trace;
++    int64_t mv_probe;  // frames probed for decoder motion vectors (Track B)
++
++    void *lib;
++    memc_create_fn create;
++    memc_configure_fn configure;
++    memc_interpolate_fn interpolate;
++    memc_interpolate_pair_fn interpolate_pair;  // optional batch path
++    memc_destroy_fn destroy;
++    present_active_fn present_active;  // Option B own-presentation hooks
++    present_frame_fn present_frame;
++    present_pair_fn present_pair;      // Stage 3: zero-readback interpolation
++    present_set_mv_seed_fn present_set_mv_seed;  // Track B decoder-MV seed (optional)
++    present_set_pts_fn present_set_pts;  // lipsync: grid media pts (optional)
++    present_flush_fn present_flush;    // drop pre-seek backlog on reset (optional)
++    void *memc;
++    int cfg_w, cfg_h;
++    int *seedpack;  // reusable scratch for packed decoder MVs (Track B)
++    int seedcap;
++};
++
++static void load_engine(struct mp_filter *f)
++{
++    struct priv *p = f->priv;
++    // Primary: dlopen the engine by soname (namespace-aware on Android).
++    p->lib = dlopen("libsmoovie_native.so", RTLD_NOW | RTLD_LOCAL);
++    if (p->lib) {
++        p->create = (memc_create_fn) dlsym(p->lib, "smoovie_memc_create");
++        p->configure = (memc_configure_fn) dlsym(p->lib, "smoovie_memc_configure");
++        p->interpolate = (memc_interpolate_fn) dlsym(p->lib, "smoovie_memc_interpolate");
++        p->interpolate_pair = (memc_interpolate_pair_fn) dlsym(p->lib, "smoovie_memc_interpolate_pair");
++        p->destroy = (memc_destroy_fn) dlsym(p->lib, "smoovie_memc_destroy");
++        // Resolve the Option B present hooks from the SAME handle — RTLD_DEFAULT
++        // from inside libmpv can't see libsmoovie_native across Android's linker
++        // namespaces, so the explicit handle is what actually binds them.
++        p->present_active = (present_active_fn) dlsym(p->lib, "smoovie_present_active");
++        p->present_frame = (present_frame_fn) dlsym(p->lib, "smoovie_present_frame");
++        p->present_pair = (present_pair_fn) dlsym(p->lib, "smoovie_present_pair");
++        p->present_set_mv_seed = (present_set_mv_seed_fn) dlsym(p->lib, "smoovie_present_set_mv_seed");
++        p->present_set_pts = (present_set_pts_fn) dlsym(p->lib, "smoovie_present_set_pts");
++        p->present_flush = (present_flush_fn) dlsym(p->lib, "smoovie_present_flush");
++    } else {
++        MP_WARN(f, "smoovie: dlopen failed (%s); trying global scope\n",
++                dlerror() ? dlerror() : "?");
++    }
++
++    // Fallback: the app loads libsmoovie_native at startup, so the symbols may
++    // already be in the process. Resolve from the default (global) scope.
++    if (!p->create || !p->configure || !p->interpolate || !p->destroy) {
++        p->create = (memc_create_fn) dlsym(RTLD_DEFAULT, "smoovie_memc_create");
++        p->configure = (memc_configure_fn) dlsym(RTLD_DEFAULT, "smoovie_memc_configure");
++        p->interpolate = (memc_interpolate_fn) dlsym(RTLD_DEFAULT, "smoovie_memc_interpolate");
++        if (!p->interpolate_pair)
++            p->interpolate_pair = (memc_interpolate_pair_fn) dlsym(RTLD_DEFAULT, "smoovie_memc_interpolate_pair");
++        p->destroy = (memc_destroy_fn) dlsym(RTLD_DEFAULT, "smoovie_memc_destroy");
++    }
++
++    // Option B presentation hooks (separate from the MEMC engine symbols; resolve
++    // from whichever scope has them). Absent => normal mpv-VO path.
++    if (!p->present_active)
++        p->present_active = (present_active_fn) dlsym(RTLD_DEFAULT, "smoovie_present_active");
++    if (!p->present_frame)
++        p->present_frame = (present_frame_fn) dlsym(RTLD_DEFAULT, "smoovie_present_frame");
++    if (!p->present_pair)
++        p->present_pair = (present_pair_fn) dlsym(RTLD_DEFAULT, "smoovie_present_pair");
++    if (!p->present_set_mv_seed)
++        p->present_set_mv_seed = (present_set_mv_seed_fn) dlsym(RTLD_DEFAULT, "smoovie_present_set_mv_seed");
++    if (!p->present_set_pts)
++        p->present_set_pts = (present_set_pts_fn) dlsym(RTLD_DEFAULT, "smoovie_present_set_pts");
++    if (!p->present_flush)
++        p->present_flush = (present_flush_fn) dlsym(RTLD_DEFAULT, "smoovie_present_flush");
++
++    if (!p->create || !p->configure || !p->interpolate || !p->destroy) {
++        MP_WARN(f, "smoovie: engine unavailable; PASSTHROUGH only\n");
++        p->lib = NULL;
++    } else {
++        MP_INFO(f, "smoovie: engine loaded, target %g fps\n", p->opts->fps);
++    }
++    MP_INFO(f, "smoovie: present hooks %s\n",
++            (p->present_active && p->present_frame) ? "resolved" : "MISSING");
++
++    // On-device finding (Adreno, 1080p): folding a whole source pair into ONE
++    // GPU submit (the batch path) monopolizes the GPU for ~50ms straight and
++    // starves mpv's GLES present for that entire window — MORE VO frame drops
++    // than many short per-frame submits that the VO can interleave presents
++    // between. Measured 0.82x vs 0.99x speed. So force the lazy per-frame path
++    // until the readback/contention is fixed structurally (zero-copy output).
++    // The symbol stays resolved above for easy re-enable.
++    p->interpolate_pair = NULL;
++}
++
++static void ensure_engine(struct mp_filter *f, struct mp_image *cur)
++{
++    struct priv *p = f->priv;
++    if (!p->lib)
++        return;
++    if (!p->memc)
++        p->memc = p->create();
++    if (p->memc && (p->cfg_w != cur->w || p->cfg_h != cur->h)) {
++        p->configure(p->memc, cur->w, cur->h, 16, 32, 1);
++        p->cfg_w = cur->w;
++        p->cfg_h = cur->h;
++        MP_INFO(f, "smoovie: configured %dx%d\n", cur->w, cur->h);
++    }
++}
++
++static struct mp_image *make_interp(struct mp_filter *f, struct mp_image *a,
++                                    struct mp_image *b, float t, double pts)
++{
++    struct priv *p = f->priv;
++    struct mp_image *out = mp_image_alloc(IMGFMT_420P, b->w, b->h);
++    if (!out)
++        return NULL;
++    mp_image_set_params(out, &b->params);
++    out->pts = pts;
++    p->interpolate(p->memc,
++        a->planes[0], a->planes[1], a->planes[2], a->stride[0], a->stride[1],
++        b->planes[0], b->planes[1], b->planes[2], b->stride[0], b->stride[1],
++        t,
++        out->planes[0], out->planes[1], out->planes[2],
++        out->stride[0], out->stride[1],
++        b->w, b->h);
++    return out;
++}
++
++// SVP-style batch render: interpolate ALL grid ticks of one source pair (a,b)
++// in a single engine call (one GPU estimate + n warps, one submit+fence wait),
++// then queue the finished frames as ready outputs. This trades the lazy path's
++// short-but-frequent submits (~3.5/pair, each serializing our compute against
++// mpv's GLES present) for one batched submit per pair — the measured display
++// wall. Frames are queued ready (img != NULL) so deliver_one just hands them out.
++static void render_batch(struct mp_filter *f, struct mp_image *a,
++                         struct mp_image *b, const float *ts,
++                         const double *pts, int n)
++{
++    struct priv *p = f->priv;
++    if (n > SMOOVIE_MAX_BATCH)
++        n = SMOOVIE_MAX_BATCH;
++
++    struct mp_image *imgs[SMOOVIE_MAX_BATCH];
++    uint8_t *oy[SMOOVIE_MAX_BATCH], *ou[SMOOVIE_MAX_BATCH], *ov[SMOOVIE_MAX_BATCH];
++    int oys[SMOOVIE_MAX_BATCH], ocs[SMOOVIE_MAX_BATCH];
++    int made = 0;
++    for (int i = 0; i < n; i++) {
++        struct mp_image *out = mp_image_alloc(IMGFMT_420P, b->w, b->h);
++        if (!out)
++            break;
++        mp_image_set_params(out, &b->params);
++        out->pts = pts[i];
++        imgs[made] = out;
++        oy[made] = out->planes[0];
++        ou[made] = out->planes[1];
++        ov[made] = out->planes[2];
++        oys[made] = out->stride[0];
++        ocs[made] = out->stride[1];
++        made++;
++    }
++    if (made > 0) {
++        p->interpolate_pair(p->memc,
++            a->planes[0], a->planes[1], a->planes[2], a->stride[0], a->stride[1],
++            b->planes[0], b->planes[1], b->planes[2], b->stride[0], b->stride[1],
++            ts, made,
++            oy, ou, ov, oys, ocs,
++            b->w, b->h);
++    }
++    for (int i = 0; i < made; i++)
++        p->queue[p->qlen++] = (struct out_item){ .img = imgs[i], .pts = pts[i] };
++}
++
++// Deliver one buffered output frame (the consumer must already want data).
++// Interp slots are rendered here, on demand, so each call blocks for at most a
++// single interpolation rather than a whole batch. If more remain queued, mark
++// progress so the framework re-invokes process() to drain them — without this
++// the queued frames never get pulled and the VO stalls (the original bug:
++// filling the queue then returning silently).
++static void deliver_one(struct mp_filter *f)
++{
++    struct priv *p = f->priv;
++    if (p->qpos >= p->qlen)
++        return;
++    struct out_item *it = &p->queue[p->qpos];
++    struct mp_image *img = it->img;
++    if (!img)  // lazy grid tick: interpolate between the batch's held edges
++        img = make_interp(f, p->render_left, p->render_right, it->t, it->pts);
++    it->img = NULL;
++    p->qpos++;
++    bool more = p->qpos < p->qlen;
++    if (!more) {
++        talloc_free(p->render_left);   // batch drained: drop both held edges
++        talloc_free(p->render_right);
++        p->render_left = NULL;
++        p->render_right = NULL;
++        p->qlen = p->qpos = 0;
++    }
++    if (img)
++        mp_pin_in_write(f->ppins[1], MAKE_FRAME(MP_FRAME_VIDEO, img));
++    if (more)
++        mp_filter_internal_mark_progress(f);
++}
++
++// Track B: pull H.264/HEVC block motion vectors off the decoded frame's side data
++// (present only with hwdec=no + vd-lavc-o=flags2=+export_mvs, i.e. debug.smoovie.
++// mvprior=1). With software decode the frame is already yuv420p, so the internal
++// mp_autoconvert is a passthrough and this side data survives onto `cur`. Returns
++// the AVMotionVector array + count (0/NULL if absent, e.g. on I-frames or when
++// export_mvs is off). This is the free motion prior ANVIL uses to skip GPU search.
++static const AVMotionVector *get_decoder_mvs(struct mp_image *img, int *n_out)
++{
++    *n_out = 0;
++    if (!img)
++        return NULL;
++    for (int n = 0; n < img->num_ff_side_data; n++) {
++        if (img->ff_side_data[n].type == AV_FRAME_DATA_MOTION_VECTORS) {
++            AVBufferRef *buf = img->ff_side_data[n].buf;
++            if (buf && buf->data) {
++                *n_out = (int)(buf->size / sizeof(AVMotionVector));
++                return (const AVMotionVector *) buf->data;
++            }
++            break;
++        }
++    }
++    return NULL;
++}
++
++static void vf_smoovie_process(struct mp_filter *f)
++{
++    struct priv *p = f->priv;
++
++    // Feed input into the internal autoconvert (forces yuv420p).
++    if (mp_pin_can_transfer_data(p->conv->f->pins[0], f->ppins[0])) {
++        struct mp_frame frame = mp_pin_out_read(f->ppins[0]);
++        if (p->trace < 40)
++            MP_INFO(f, "smoovie: IN->conv type=%d\n", frame.type);
++        mp_pin_in_write(p->conv->f->pins[0], frame);
++    }
++
++    // Drain already-buffered output first, one frame per call.
++    if (p->qpos < p->qlen) {
++        if (!mp_pin_in_needs_data(f->ppins[1]))
++            return;
++        deliver_one(f);
++        return;
++    }
++
++    // Produce the next batch only when the consumer wants a frame (this also
++    // requests data from the autoconvert, driving the pipeline).
++    if (!mp_pin_can_transfer_data(f->ppins[1], p->conv->f->pins[1]))
++        return;
++
++    struct mp_frame frame = mp_pin_out_read(p->conv->f->pins[1]);
++
++    if (p->trace < 40) {
++        MP_INFO(f, "smoovie: conv->us type=%d prev=%d\n", frame.type, !!p->prev);
++        p->trace++;
++    }
++
++    if (frame.type == MP_FRAME_EOF) {
++        if (p->prev) {
++            struct mp_image *last = p->prev;
++            p->prev = NULL;
++            mp_pin_out_unread(p->conv->f->pins[1], frame);
++            mp_pin_in_write(f->ppins[1], MAKE_FRAME(MP_FRAME_VIDEO, last));
++        } else {
++            mp_pin_in_write(f->ppins[1], frame);
++        }
++        return;
++    }
++
++    if (frame.type != MP_FRAME_VIDEO) {
++        mp_pin_in_write(f->ppins[1], frame);
++        return;
++    }
++
++    struct mp_image *cur = frame.data;  // owned by us
++
++    // Track B probe: confirm decoder MVs reach the filter through the autoconvert.
++    // Logs the per-frame MV count so on-device we can verify the data path before
++    // wiring MVs into estimation (B2/B3). 0 on I-frames or when export_mvs is off.
++    {
++        int n_mvs = 0;
++        const AVMotionVector *mvs = get_decoder_mvs(cur, &n_mvs);
++        (void) mvs;  // consumed by the engine in B2/B3
++        if (p->mv_probe++ % 60 == 0)
++            MP_INFO(f, "smoovie: decoder MVs=%d (ff_side_data=%d)\n",
++                    n_mvs, cur->num_ff_side_data);
++    }
++
++    // Option B: our Vulkan presenter owns the Surface (mpv is headless vo=null).
++    // Stage 3: interpolate the source PAIR (prev,cur) on the GPU and present each
++    // motion-compensated frame straight to the swapchain — no readback, no VO
++    // contention. FIFO present paces output to the display and back-pressures
++    // decode to the source rate. We still pass `cur` through to drain the null
++    // VO chain and keep a ref as the next pair's left edge.
++    if (p->present_active && p->present_active()) {
++        // NOTE: interpolation here runs on the presenter's OWN device inside
++        // libsmoovie_native (smoovie_present_pair), NOT p->memc — so we do not
++        // create/configure the readback engine in present mode.
++        double interval = (p->opts->fps > 0) ? 1.0 / p->opts->fps : 0;
++        double b_pts = cur->pts;
++
++        // fps<=1 is the explicit "Off" passthrough: present every source frame
++        // 1:1 with NO interpolation (so an A/B against interpolation is honest).
++        if (!p->prev || !p->present_pair || p->opts->fps <= 1.0) {
++            // First frame / Off / interpolation unavailable: present source as-is.
++            if (p->present_frame)
++                p->present_frame(cur->planes[0], cur->planes[1], cur->planes[2],
++                                 cur->stride[0], cur->stride[1], cur->w, cur->h);
++            if (isfinite(b_pts)) {
++                p->next_pts = b_pts + interval;
++                p->clock_init = true;
++            }
++            if (p->batches++ < 12)
++                MP_INFO(f, "smoovie: present PASSTHROUGH (fps=%g)\n", p->opts->fps);
++        } else {
++            // Build the interpolation grid for (prev, cur] on the fixed output
++            // clock, then render+present the whole pair in one engine call.
++            double a_pts = p->prev->pts;
++            int n = 0;
++            float ts[SMOOVIE_MAX_BATCH];
++
++            // Seek / discontinuity guard. A normal source pair spans ~1/src_fps.
++            // After a keyframe seek — or while the user DRAGS the seek bar — prev
++            // and cur come from far-apart positions, so b-a balloons to seconds.
++            // The grid below would then clamp to SMOOVIE_MAX_BATCH tiny-t frames
++            // AND strand next_pts far behind b, so every following dragged pair
++            // clamps again: the sustained "compute n=5 / free=0" storm that runs
++            // the GPU flat-out and (with framedrop=no) stalls audio for seconds
++            // after a scrub. If one output batch can't even span the gap it isn't
++            // a real motion pair — drop any queued pre-seek backlog, present cur
++            // 1:1, and re-anchor the output clock to cur.
++            double maxgap = (double) SMOOVIE_MAX_BATCH * interval;
++            if (maxgap < 0.1) maxgap = 0.1;  // floor for very high target fps
++            bool seekjump = !(isfinite(a_pts) && isfinite(b_pts)) ||
++                            b_pts <= a_pts || (b_pts - a_pts) > maxgap;
++            if (seekjump) {
++                if (p->present_flush)
++                    p->present_flush();
++                if (p->present_set_pts)
++                    p->present_set_pts(NULL, 0, b_pts);
++                if (p->present_frame)
++                    p->present_frame(cur->planes[0], cur->planes[1], cur->planes[2],
++                                     cur->stride[0], cur->stride[1], cur->w, cur->h);
++                if (isfinite(b_pts)) {
++                    p->next_pts = b_pts + interval;
++                    p->clock_init = true;
++                }
++            } else {
++                if (!p->clock_init || p->next_pts <= a_pts) {
++                    p->next_pts = a_pts + interval;
++                    p->clock_init = true;
++                }
++                double tps[SMOOVIE_MAX_BATCH];
++                int guard = 0;
++                while (p->next_pts < b_pts + 1e-9 && n < SMOOVIE_MAX_BATCH &&
++                       guard++ < 64) {
++                    ts[n] = (float) ((p->next_pts - a_pts) / (b_pts - a_pts));
++                    tps[n] = p->next_pts;
++                    n++;
++                    p->next_pts += interval;
++                }
++                // Lipsync: hand the grid's MEDIA pts (and the source frame's, for
++                // the passthrough branch) to the presenter alongside the pair.
++                if (p->present_set_pts)
++                    p->present_set_pts(tps, n, b_pts);
++                // Track B: stage decoder MVs (on `cur`, describing prev->cur motion)
++                // as the coarse seed for this pair's GPU estimate. Pack source==-1
++                // vectors as full-pel A->B motion (negate + /motion_scale, matching
++                // ANVIL). The engine rasterizes them to its block grid; estimate.comp
++                // then skips its eighth-res coarse search. cnt==0 clears the seed.
++                if (p->present_set_mv_seed) {
++                    int nmv = 0;
++                    const AVMotionVector *mv = get_decoder_mvs(cur, &nmv);
++                    int cnt = 0;
++                    if (mv && nmv > 0) {
++                        if (nmv * 6 > p->seedcap) {
++                            free(p->seedpack);
++                            p->seedpack = malloc(sizeof(int) * (size_t) nmv * 6);
++                            p->seedcap = p->seedpack ? nmv * 6 : 0;
++                        }
++                        for (int i = 0; p->seedpack && i < nmv; i++) {
++                            const AVMotionVector *m = &mv[i];
++                            if (m->source != -1)
++                                continue;
++                            float sc = m->motion_scale > 0 ? (float) m->motion_scale : 1.0f;
++                            int *o = &p->seedpack[cnt * 6];
++                            o[0] = m->dst_x; o[1] = m->dst_y; o[2] = m->w; o[3] = m->h;
++                            o[4] = (int) lroundf(-(float) m->motion_x / sc);
++                            o[5] = (int) lroundf(-(float) m->motion_y / sc);
++                            cnt++;
++                        }
++                    }
++                    p->present_set_mv_seed(p->seedpack, cnt);
++                }
++
++                int presented = 0;
++                if (n > 0)
++                    presented = p->present_pair(
++                        p->prev->planes[0], p->prev->planes[1], p->prev->planes[2],
++                        p->prev->stride[0], p->prev->stride[1],
++                        cur->planes[0], cur->planes[1], cur->planes[2],
++                        cur->stride[0], cur->stride[1],
++                        ts, n, cur->w, cur->h);
++                if (presented == 0 && p->present_frame)  // degenerate gap / failure
++                    p->present_frame(cur->planes[0], cur->planes[1], cur->planes[2],
++                                     cur->stride[0], cur->stride[1], cur->w, cur->h);
++                if (p->batches++ < 12)
++                    MP_INFO(f, "smoovie: present pair a=%.3f b=%.3f n=%d presented=%d\n",
++                            a_pts, b_pts, n, presented);
++            }
++        }
++
++        talloc_free(p->prev);
++        p->prev = mp_image_new_ref(cur);
++        mp_pin_in_write(f->ppins[1], MAKE_FRAME(MP_FRAME_VIDEO, cur));
++        return;
++    }
++
++    double interval = (p->opts->fps > 0) ? 1.0 / p->opts->fps : 0;
++    p->qlen = p->qpos = 0;
++
++    if (p->opts->fps <= 1.0) {
++        // Passthrough: forward each converted frame 1:1 (diagnostic / disable).
++        p->queue[p->qlen++] = (struct out_item){ .img = cur };
++    } else if (!p->prev) {
++        // First frame: pass through and keep it as the left edge.
++        p->prev = mp_image_new_ref(cur);
++        p->clock_init = isfinite(cur->pts);
++        p->next_pts = p->clock_init ? cur->pts + interval : 0;
++        p->queue[p->qlen++] = (struct out_item){ .img = cur };
++    } else {
++        ensure_engine(f, cur);
++        double a = p->prev->pts, b = cur->pts;
++        int ninterp = 0;
++        float ts[22];
++        double tps[22];
++
++        // Build a PURE, evenly-spaced output grid: one interpolated frame per
++        // output tick in (a, b], all on the fixed opts->fps clock. Unlike the
++        // old path we do NOT also emit the raw source frame `cur` — mixing
++        // off-grid source frames with grid frames produced an irregular ~84fps
++        // stream (for fps=60) that the VO couldn't present cleanly. Every tick,
++        // including ones landing right next to a source frame, is interpolated;
++        // the warp at t≈1 reproduces ~`cur`.
++        if (p->memc && interval > 0 && isfinite(a) && isfinite(b) && b > a) {
++            if (!p->clock_init || p->next_pts <= a) {
++                p->next_pts = a + interval;
++                p->clock_init = true;
++            }
++            int guard = 0;
++            while (p->next_pts < b + 1e-9 && ninterp < 22 && guard++ < 64) {
++                ts[ninterp] = (float) ((p->next_pts - a) / (b - a));  // (0, 1]
++                tps[ninterp] = p->next_pts;
++                ninterp++;
++                p->next_pts += interval;
++            }
++        }
++
++        if (ninterp > 0 && p->interpolate_pair && ninterp <= SMOOVIE_MAX_BATCH) {
++            // SVP-style: render the whole pair in ONE GPU submit, queue ready
++            // frames. `cur` rotates in as the next pair's left edge; the old
++            // left edge (prev) is consumed and freed.
++            render_batch(f, p->prev, cur, ts, tps, ninterp);
++            talloc_free(p->prev);
++            p->prev = cur;  // take ownership of cur as next left edge
++            talloc_free(p->render_left);
++            p->render_left = NULL;
++            talloc_free(p->render_right);
++            p->render_right = NULL;
++        } else if (ninterp > 0) {
++            // Lazy fallback (no batch symbol, or more ticks than one batch):
++            // hold both source edges and render one tick per deliver_one.
++            for (int i = 0; i < ninterp; i++)
++                p->queue[p->qlen++] = (struct out_item){
++                    .img = NULL, .t = ts[i], .pts = tps[i] };
++            talloc_free(p->render_left);
++            talloc_free(p->render_right);
++            p->render_left = p->prev;
++            p->render_right = mp_image_new_ref(cur);
++            p->prev = cur;
++        } else {
++            // No grid ticks (engine missing / degenerate gap): pass `cur` through
++            // so the consumer never stalls, and keep it as the next left edge.
++            p->queue[p->qlen++] = (struct out_item){ .img = cur };
++            talloc_free(p->render_left);
++            p->render_left = NULL;
++            talloc_free(p->render_right);
++            p->render_right = NULL;
++            p->prev = mp_image_new_ref(cur);
++        }
++
++        if (p->batches++ < 12)
++            MP_INFO(f, "smoovie: a=%.3f b=%.3f emitted %d (interp=%d memc=%d)\n",
++                    a, b, p->qlen, ninterp, !!p->memc);
++    }
++
++    // Deliver the first frame of the batch now; the rest drain on re-invoke.
++    deliver_one(f);
++}
++
++static void vf_smoovie_reset(struct mp_filter *f)
++{
++    struct priv *p = f->priv;
++    for (int i = p->qpos; i < p->qlen; i++)
++        talloc_free(p->queue[i].img);  // NULL for un-rendered interp slots: safe
++    p->qlen = p->qpos = 0;
++    talloc_free(p->render_left);
++    p->render_left = NULL;
++    talloc_free(p->render_right);
++    p->render_right = NULL;
++    talloc_free(p->prev);
++    p->prev = NULL;
++    p->clock_init = false;
++    // Drop the present thread's pre-seek backlog too. Without this, mpv's seek
++    // clears OUR filter state but the presenter keeps draining seconds of stale
++    // interpolated pairs (the n=5 / free=0 compute storm seen after a scrub),
++    // back-pressuring the playloop so audio resumes late with a big gap.
++    if (p->present_flush)
++        p->present_flush();
++}
++
++static void vf_smoovie_destroy(struct mp_filter *f)
++{
++    struct priv *p = f->priv;
++    vf_smoovie_reset(f);
++    free(p->seedpack);
++    p->seedpack = NULL;
++    if (p->memc && p->destroy)
++        p->destroy(p->memc);
++    if (p->lib)
++        dlclose(p->lib);
++}
++
++static const struct mp_filter_info vf_smoovie_filter = {
++    .name = "smoovie",
++    .process = vf_smoovie_process,
++    .reset = vf_smoovie_reset,
++    .destroy = vf_smoovie_destroy,
++    .priv_size = sizeof(struct priv),
++};
++
++static struct mp_filter *vf_smoovie_create(struct mp_filter *parent, void *options)
++{
++    struct mp_filter *f = mp_filter_create(parent, &vf_smoovie_filter);
++    if (!f) {
++        talloc_free(options);
++        return NULL;
++    }
++    struct priv *p = f->priv;
++    p->opts = talloc_steal(p, options);
++
++    mp_filter_add_pin(f, MP_PIN_IN, "in");
++    mp_filter_add_pin(f, MP_PIN_OUT, "out");
++
++    p->conv = mp_autoconvert_create(f);
++    if (!p->conv) {
++        talloc_free(f);
++        return NULL;
++    }
++    mp_autoconvert_add_imgfmt(p->conv, IMGFMT_420P, 0);
++
++    MP_INFO(f, "smoovie: filter created (target %g fps)\n", p->opts->fps);
++    load_engine(f);
++    return f;
++}
++
++#define OPT_BASE_STRUCT struct smoovie_opts
++static const m_option_t vf_smoovie_opts[] = {
++    {"fps", OPT_DOUBLE(fps), M_RANGE(0, 480)},
++    {0}
++};
++
++const struct mp_user_filter_entry vf_smoovie = {
++    .desc = {
++        .description = "Smoovie MEMC frame interpolation",
++        .name = "smoovie",
++        .priv_size = sizeof(OPT_BASE_STRUCT),
++        .priv_defaults = &(const OPT_BASE_STRUCT){
++            .fps = 60,
++        },
++        .options = vf_smoovie_opts,
++    },
++    .create = vf_smoovie_create,
++};
