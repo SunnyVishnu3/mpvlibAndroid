@@ -77,6 +77,7 @@ fetch_prefix() {
 }
 
 build_prefix() {
+	set -e
 	msg "Building the prefix ($ci_cache_identifier)..."
 
 	msg "Fetching deps"
@@ -153,7 +154,9 @@ elif [ "$1" = "install" ]; then
 
 	msg "Trying to fetch existing prefix"
 	mkdir -p prefix
-	fetch_prefix || build_prefix
+	if ! fetch_prefix; then
+		build_prefix
+	fi
 	exit 0
 elif [ "$1" = "build" ]; then
 	# run build

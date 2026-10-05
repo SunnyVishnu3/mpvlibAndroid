@@ -1,0 +1,29 @@
+# Preserve LF line endings for all scripts and patches
+*.sh text eol=lf
+*.patch text eol=lf
+*.bash text eol=lf
+*.py text eol=lf
+gradlew text eol=lf
+
+# Standard text
+*.kt text
+*.java text
+*.cpp text
+*.c text
+*.h text
+*.hpp text
+*.gradle text
+*.pro text
+*.md text
+*.yml text
+*.yaml text
+
+# Binaries
+*.jar binary
+*.aar binary
+*.so binary
+*.tgz binary
+*.tar.gz binary
+*.ttf binary
+*.png binary
+*.jpg binary

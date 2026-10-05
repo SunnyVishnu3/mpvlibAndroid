@@ -75,7 +75,7 @@ v_ci_dav1d=master
 v_ci_libass=master
 v_ci_libplacebo=fongmi
 # Bump when this branch's prefix recipe changes without a version change.
-v_ci_prefix=4
+v_ci_prefix=5
 
 # filename used to uniquely identify a build prefix
 ci_tarball="prefix-fongmi-ndk-${v_ndk}-opengl-vulkan-shaderc-lua-${v_lua}-mujs-${v_mujs}-unibreak-${v_unibreak}-harfbuzz-${v_harfbuzz}-fribidi-${v_fribidi}-freetype-${v_freetype}-libxml2-${v_libxml2}-libmysofa-${v_libmysofa}-libaribcaption-${v_libaribcaption}-mbedtls-${v_mbedtls}-curl-${v_curl}-libbluray-${v_libbluray}-libiconv-${v_libiconv}-uchardet-${v_uchardet}-bzip2-${v_bzip2}-xz-${v_xz}-zstd-${v_zstd}-libarchive-${v_libarchive}-libdvdread-${v_libdvdread}-libdvdnav-${v_libdvdnav}-rubberband-${v_rubberband}-ffmpeg-${v_ci_ffmpeg}-prefix-${v_ci_prefix}.tgz"
