@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentHashMap
 
 @Suppress("unused")
@@ -21,9 +22,34 @@ object MPVLib {
         }
     }
 
+    interface Stream {
+        fun read(buffer: ByteBuffer): Int
+        fun seek(position: Long): Long
+        fun size(): Long
+        fun cancel()
+        fun close()
+    }
+
+    private val streams = ConcurrentHashMap<String, () -> Stream>()
+
+    fun registerStream(uri: String, factory: () -> Stream) { streams[uri] = factory }
+    fun unregisterStream(uri: String) { streams.remove(uri) }
+
+    @JvmStatic
+    fun openStream(uri: String): Stream? = streams[uri]?.invoke()
+
     external fun create(appctx: Context)
     external fun init()
-    private external fun destroyNative()
+    private external fun destroyNative(): Int
+
+    fun destroy(): Int {
+        return try {
+            destroyNative()
+        } finally {
+            clearManagedState()
+        }
+    }
+
     external fun attachSurface(surface: Surface)
     external fun replaceSurface(surface: Surface)
     external fun detachSurface()
@@ -31,16 +57,13 @@ object MPVLib {
     external fun replaceOsdSurface(surface: Surface)
     external fun detachOsdSurface()
 
-    fun destroy() {
-        try {
-            destroyNative()
-        } finally {
-            clearManagedState()
-        }
-    }
-
-    external fun command(vararg cmd: String)
+    external fun command(vararg cmd: String): Int
     external fun commandNode(vararg cmd: String): MPVNode?
+
+    // Asynchronous commands (delivered through EventObserver.eventCommandReply)
+    external fun enqueueCommand(requestId: Long, vararg cmd: String): Int
+    external fun enqueueCommandLongResult(requestId: Long, resultKey: String, vararg cmd: String): Int
+
 
     external fun setOptionString(name: String, value: String): Int
 
@@ -50,15 +73,16 @@ object MPVLib {
     external fun clearThumbnailCache()
 
     external fun getPropertyInt(property: String): Int?
-    external fun setPropertyInt(property: String, value: Int)
+    external fun setPropertyInt(property: String, value: Int): Int
     external fun getPropertyDouble(property: String): Double?
-    external fun setPropertyDouble(property: String, value: Double)
+    external fun setPropertyDouble(property: String, value: Double): Int
     external fun getPropertyBoolean(property: String): Boolean?
-    external fun setPropertyBoolean(property: String, value: Boolean)
+    external fun setPropertyBoolean(property: String, value: Boolean): Int
     external fun getPropertyString(property: String): String?
-    external fun setPropertyString(property: String, value: String)
+    external fun setPropertyString(property: String, value: String): Int
+    external fun getPropertyByteArray(property: String): ByteArray?
     external fun getPropertyNode(property: String): MPVNode?
-    external fun setPropertyNode(property: String, node: MPVNode)
+    external fun setPropertyNode(property: String, node: MPVNode): Int
 
     @JvmStatic
     fun getPropertyFloat(property: String) = getPropertyDouble(property)?.toFloat()
@@ -69,7 +93,7 @@ object MPVLib {
     @JvmStatic
     fun setPropertyLong(property: String, value: Long) = setPropertyInt(property, value.toInt())
 
-    external fun observeProperty(property: String, format: Int)
+    external fun observeProperty(property: String, format: Int): Int
 
     private val observers: MutableList<EventObserver> = ArrayList()
 
@@ -123,7 +147,7 @@ object MPVLib {
 
     fun eventFlow(property: String): Flow<Unit> {
         observeProperty(property, MpvFormat.MPV_FORMAT_NONE)
-        return eventPropertyFlow.filter { it == property }.map { it }
+        return eventPropertyFlow.filter { it == property }.map { }
     }
 
     fun eventFlow(eventId: Int): Flow<Unit> {
@@ -186,8 +210,36 @@ object MPVLib {
 
     @JvmStatic
     fun event(eventId: Int, data: MPVNode) {
-        for (o in eventObserverSnapshot()) o.event(eventId, data)
+        for (o in eventObserverSnapshot()) {
+            o.event(eventId, data)
+            o.event(eventId)
+        }
         eventFlow.tryEmit(eventId)
+    }
+
+    @JvmStatic
+    fun event(eventId: Int) {
+        for (o in eventObserverSnapshot()) o.event(eventId)
+        eventFlow.tryEmit(eventId)
+    }
+
+    @JvmStatic
+    fun eventCommandReply(requestId: Long, error: Int) {
+        eventCommandReply(requestId, error, 0)
+    }
+
+    @JvmStatic
+    fun eventCommandReply(requestId: Long, error: Int, result: Long) {
+        for (o in eventObserverSnapshot()) {
+            o.eventCommandReply(requestId, error, result)
+        }
+    }
+
+    @JvmStatic
+    fun eventEndFile(reason: Int, error: Int, errorString: String?) {
+        for (o in eventObserverSnapshot()) {
+            o.eventEndFile(reason, error, errorString)
+        }
     }
 
     private val log_observers: MutableList<LogObserver> = ArrayList()
@@ -213,6 +265,7 @@ object MPVLib {
         }
         synchronized(observers) { observers.clear() }
         synchronized(log_observers) { log_observers.clear() }
+        streams.clear()
     }
 
     @JvmStatic
@@ -229,6 +282,14 @@ object MPVLib {
         fun eventProperty(property: String, value: Double)
         fun eventProperty(property: String, value: MPVNode)
         fun event(eventId: Int, data: MPVNode)
+        fun event(eventId: Int) {}
+        fun eventCommandReply(requestId: Long, error: Int) {}
+        fun eventCommandReply(requestId: Long, error: Int, result: Long) {
+            eventCommandReply(requestId, error)
+        }
+        fun eventEndFile(reason: Int, error: Int, errorString: String?) {
+            event(MpvEvent.MPV_EVENT_END_FILE)
+        }
     }
 
     interface LogObserver {
@@ -272,6 +333,38 @@ object MPVLib {
         const val MPV_EVENT_PROPERTY_CHANGE: Int = 22
         const val MPV_EVENT_QUEUE_OVERFLOW: Int = 24
         const val MPV_EVENT_HOOK: Int = 25
+    }
+
+    object MpvEndFileReason {
+        const val MPV_END_FILE_REASON_EOF: Int = 0
+        const val MPV_END_FILE_REASON_STOP: Int = 2
+        const val MPV_END_FILE_REASON_QUIT: Int = 3
+        const val MPV_END_FILE_REASON_ERROR: Int = 4
+        const val MPV_END_FILE_REASON_REDIRECT: Int = 5
+    }
+
+    object MpvError {
+        const val MPV_ERROR_SUCCESS: Int = 0
+        const val MPV_ERROR_EVENT_QUEUE_FULL: Int = -1
+        const val MPV_ERROR_NOMEM: Int = -2
+        const val MPV_ERROR_UNINITIALIZED: Int = -3
+        const val MPV_ERROR_INVALID_PARAMETER: Int = -4
+        const val MPV_ERROR_OPTION_NOT_FOUND: Int = -5
+        const val MPV_ERROR_OPTION_FORMAT: Int = -6
+        const val MPV_ERROR_OPTION_ERROR: Int = -7
+        const val MPV_ERROR_PROPERTY_NOT_FOUND: Int = -8
+        const val MPV_ERROR_PROPERTY_FORMAT: Int = -9
+        const val MPV_ERROR_PROPERTY_UNAVAILABLE: Int = -10
+        const val MPV_ERROR_PROPERTY_ERROR: Int = -11
+        const val MPV_ERROR_COMMAND: Int = -12
+        const val MPV_ERROR_LOADING_FAILED: Int = -13
+        const val MPV_ERROR_AO_INIT_FAILED: Int = -14
+        const val MPV_ERROR_VO_INIT_FAILED: Int = -15
+        const val MPV_ERROR_NOTHING_TO_PLAY: Int = -16
+        const val MPV_ERROR_UNKNOWN_FORMAT: Int = -17
+        const val MPV_ERROR_UNSUPPORTED: Int = -18
+        const val MPV_ERROR_NOT_IMPLEMENTED: Int = -19
+        const val MPV_ERROR_GENERIC: Int = -20
     }
 
     object MpvLogLevel {

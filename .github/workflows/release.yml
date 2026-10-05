@@ -129,6 +129,11 @@ jobs:
       VERSION_TAG: ${{ needs.prepare.outputs.version_tag }}
       VERSION_NAME: ${{ needs.prepare.outputs.version_name }}
       VERSION_CODE: ${{ needs.prepare.outputs.version_code }}
+      MPV_GIT_URL: https://github.com/FongMi/mpv.git
+      MPV_GIT_REF: fongmi
+      FFMPEG_GIT_URL: https://github.com/FongMi/FFmpeg.git
+      LIBPLACEBO_GIT_URL: https://github.com/FongMi/libplacebo.git
+
       CACHE_MODE: folder
       CACHE_FOLDER: ${{ github.workspace }}/gh-cache
 
@@ -186,7 +191,7 @@ jobs:
           python-version: "3.12"
 
       - name: Export CI environment variables
-        run: buildscripts/include/ci.sh export >> "$GITHUB_ENV"
+        run: bash buildscripts/include/ci.sh export >> "$GITHUB_ENV"
 
       - name: Restore Android SDK cache
         id: android-sdk-cache
@@ -230,6 +235,7 @@ jobs:
             libtool \
             nasm \
             ninja-build \
+            patch \
             pkg-config \
             python3 \
             python3-pip \
@@ -245,7 +251,7 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p "$CACHE_FOLDER"
-          buildscripts/include/ci.sh install
+          bash buildscripts/include/ci.sh install
 
       - name: Save Android SDK cache
         if: steps.android-sdk-cache.outputs.cache-hit != 'true'

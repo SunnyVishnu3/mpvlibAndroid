@@ -21,32 +21,64 @@ import java.io.*
 import kotlin.math.abs
 
 object Utils {
+    private fun copyAssetFile(assetManager: AssetManager, filename: String, outFile: File): Boolean {
+        var ins: InputStream? = null
+        var out: OutputStream? = null
+        try {
+            ins = assetManager.open(filename, AssetManager.ACCESS_STREAMING)
+            val avail = ins.available().toLong()
+            if (outFile.length() == avail) {
+                Log.v(TAG, "Skipping copy of asset file (exists same size): $filename")
+                return true
+            }
+            out = FileOutputStream(outFile)
+            ins.copyTo(out)
+            Log.w(TAG, "Copied asset file ($avail bytes): $filename")
+        } catch (e: IOException) {
+            Log.e(TAG, "Failed to copy asset file: $filename", e)
+            return false
+        } finally {
+            out?.close()
+            ins?.close()
+        }
+        return true
+    }
+
+    /** Write the 'fonts.conf' for fontconfig. */
+    private fun writeFontsConf(context: Context, configFile: File) {
+        val parts = mutableListOf(
+            "<fontconfig>",
+            "<dir>/system/fonts/</dir>",
+            "<dir>/product/fonts/</dir>",
+            "<cachedir>${context.cacheDir.path}</cachedir>",
+            "<alias><family>serif</family>",
+            "<prefer><family>Noto Serif</family></prefer>",
+            "</alias>",
+            "<alias><family>sans-serif</family>",
+            "<prefer>",
+            "<family>Roboto</family>",
+            "<family>Noto Sans</family>",
+            "</prefer>",
+            "</alias>",
+            "<alias><family>monospace</family>",
+            "<prefer><family>Droid Sans Mono</family></prefer>",
+            "</alias>",
+            "</fontconfig>"
+        )
+        try {
+            configFile.writeText(parts.joinToString("\n"))
+        } catch (e: IOException) {
+            Log.w(TAG, "Failed to write fonts.conf", e)
+        }
+    }
+
     fun copyAssets(context: Context) {
         val assetManager = context.assets
-        val files = arrayOf("subfont.ttf", "cacert.pem")
         val configDir = context.filesDir.path
-        for (filename in files) {
-            var ins: InputStream? = null
-            var out: OutputStream? = null
-            try {
-                ins = assetManager.open(filename, AssetManager.ACCESS_STREAMING)
-                val outFile = File("$configDir/$filename")
-                // Note that .available() officially returns an *estimated* number of bytes available
-                // this is only true for generic streams, asset streams return the full file size
-                if (outFile.length() == ins.available().toLong()) {
-                    Log.v(TAG, "Skipping copy of asset file (exists same size): $filename")
-                    continue
-                }
-                out = FileOutputStream(outFile)
-                ins.copyTo(out)
-                Log.w(TAG, "Copied asset file: $filename")
-            } catch (e: IOException) {
-                Log.e(TAG, "Failed to copy asset file: $filename", e)
-            } finally {
-                ins?.close()
-                out?.close()
-            }
+        for (filename in arrayOf("subfont.ttf", "cacert.pem")) {
+            copyAssetFile(assetManager, filename, File("$configDir/$filename"))
         }
+        writeFontsConf(context, File("$configDir/fonts.conf"))
     }
 
     fun findRealPath(fd: Int): String? {
@@ -130,8 +162,10 @@ object Utils {
                 continue
 
             // find the actual root path of that volume
-            while (root.parentFile != null && storageManager.getStorageVolume(root.parentFile) == vol) {
-                root = root.parentFile!!
+            while (true) {
+                val parent = root.parentFile ?: break
+                if (storageManager.getStorageVolume(parent) != vol) break
+                root = parent
             }
 
             if (!list.any { it.path == root })
@@ -284,7 +318,7 @@ object Utils {
 
     // cf. AndroidManifest.xml and MPVActivity.resolveUri()
     val PROTOCOLS = setOf(
-        "file", "content", "http", "https", "data",
+        "file", "content", "http", "https", "data", "ftp", "media3iso",
         "rtmp", "rtmps", "rtp", "rtsp", "mms", "mmst", "mmsh", "tcp", "udp", "lavf"
     )
 

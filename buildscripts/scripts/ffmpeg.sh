@@ -28,7 +28,7 @@ cpu=armv7-a
 cpuflags=
 [[ "$ndk_triple" == "arm"* ]] && cpuflags="$cpuflags -mfpu=neon -mcpu=cortex-a8"
 
-audio_filters=(acompressor alimiter equalizer pan silenceremove stereotools volume)
+audio_filters=(acompressor alimiter dynaudnorm equalizer pan silenceremove stereotools volume)
 audio_filter_args=()
 for filter in "${audio_filters[@]}"; do
 	audio_filter_args+=(--enable-filter="$filter")

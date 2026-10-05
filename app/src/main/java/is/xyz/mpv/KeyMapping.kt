@@ -5,6 +5,7 @@ package `is`.xyz.mpv;
 import android.view.KeyEvent.*;
 
 // https://github.com/mpv-player/mpv/blob/master/input/keycodes.h
+@JvmField
 val KeyMapping: Map<Int, String> = mapOf(
     KEYCODE_SPACE to "SPACE",
     KEYCODE_ENTER to "ENTER",
@@ -64,3 +65,6 @@ val KeyMapping: Map<Int, String> = mapOf(
     KEYCODE_PROG_YELLOW to "F15",
     KEYCODE_PROG_BLUE to "F16"
 )
+
+@JvmField
+val keyMapping: Map<Int, String> = KeyMapping

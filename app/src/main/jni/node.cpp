@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 #include <mpv/client.h>
 #include "jni_utils.h"
 
@@ -14,9 +15,10 @@ jobject mpv_node_to_jobject(JNIEnv *env, const mpv_node *node) {
             return env->GetStaticObjectField(mpv_MPVNode_None, mpv_MPVNode_None_INSTANCE);
         }
         case MPV_FORMAT_STRING: {
-            jstring jstr = env->NewStringUTF(node->u.string);
+            jstring jstr = utf8_to_jstring(env, node->u.string);
             jobject result = env->NewObject(mpv_MPVNode_StringNode, mpv_MPVNode_StringNode_init, jstr);
-            env->DeleteLocalRef(jstr);
+            if (jstr)
+                env->DeleteLocalRef(jstr);
             return result;
         }
         case MPV_FORMAT_FLAG: {
@@ -44,7 +46,7 @@ jobject mpv_node_to_jobject(JNIEnv *env, const mpv_node *node) {
         case MPV_FORMAT_NODE_MAP: {
             jobject hashMap = env->NewObject(java_util_HashMap, java_util_HashMap_init);
             for (int i = 0; i < node->u.list->num; i++) {
-                jstring key = env->NewStringUTF(node->u.list->keys[i]);
+                jstring key = utf8_to_jstring(env, node->u.list->keys[i]);
                 jobject childNode = mpv_node_to_jobject(env, &node->u.list->values[i]);
                 if (childNode) {
                     jobject previous = env->CallObjectMethod(hashMap, java_util_HashMap_put, key, childNode);
@@ -52,7 +54,8 @@ jobject mpv_node_to_jobject(JNIEnv *env, const mpv_node *node) {
                         env->DeleteLocalRef(previous);
                     env->DeleteLocalRef(childNode);
                 }
-                env->DeleteLocalRef(key);
+                if (key)
+                    env->DeleteLocalRef(key);
             }
             jobject result = env->NewObject(mpv_MPVNode_MapNode, mpv_MPVNode_MapNode_init, hashMap);
             env->DeleteLocalRef(hashMap);
@@ -75,16 +78,16 @@ int jobject_to_mpv_node(JNIEnv *env, jobject jnode, mpv_node *node) {
     if (env->IsInstanceOf(jnode, mpv_MPVNode_StringNode)) {
         jfieldID valueField = env->GetFieldID(mpv_MPVNode_StringNode, "value", "Ljava/lang/String;");
         jstring jstr = (jstring)env->GetObjectField(jnode, valueField);
-        if (jstr) {
-            const char *str = env->GetStringUTFChars(jstr, NULL);
+        std::string utf8;
+        if (jstr && jstring_to_utf8(env, jstr, &utf8)) {
             node->format = MPV_FORMAT_STRING;
-            node->u.string = strdup(str);
-            env->ReleaseStringUTFChars(jstr, str);
-            env->DeleteLocalRef(jstr);
+            node->u.string = strdup(utf8.c_str());
         } else {
             node->format = MPV_FORMAT_STRING;
             node->u.string = strdup("");
         }
+        if (jstr)
+            env->DeleteLocalRef(jstr);
         return 0;
     }
 
@@ -175,12 +178,14 @@ int jobject_to_mpv_node(JNIEnv *env, jobject jnode, mpv_node *node) {
                     jstring keyStr = (jstring)env->CallObjectMethod(entry, getKeyMethod);
                     jobject valueObj = env->CallObjectMethod(entry, getValueMethod);
 
-                    if (keyStr) {
-                        const char *key = env->GetStringUTFChars(keyStr, NULL);
-                        node->u.list->keys[i] = strdup(key);
-                        env->ReleaseStringUTFChars(keyStr, key);
-                        env->DeleteLocalRef(keyStr);
+                    std::string keyUtf8;
+                    if (keyStr && jstring_to_utf8(env, keyStr, &keyUtf8)) {
+                        node->u.list->keys[i] = strdup(keyUtf8.c_str());
+                    } else {
+                        node->u.list->keys[i] = strdup("");
                     }
+                    if (keyStr)
+                        env->DeleteLocalRef(keyStr);
 
                     if (valueObj) {
                         jobject_to_mpv_node(env, valueObj, &node->u.list->values[i]);

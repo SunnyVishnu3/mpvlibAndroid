@@ -215,6 +215,7 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
+loadndk
 loadarch $arch
 setup_prefix
 if [ $onlydeps -eq 1 ]; then

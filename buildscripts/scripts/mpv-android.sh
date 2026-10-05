@@ -46,6 +46,7 @@ ndk-build -C app/src/main -j$cores
 # Android's gradle plugin needs both of these to correctly strip libraries.
 # We could pass them directly to Gradle but by using this file it will persist
 # inside Android Studio too.
+[ -z "$ANDROID_NDK_ROOT" ] && ANDROID_NDK_ROOT="$BUILD/sdk/android-ndk-${v_ndk}"
 printf '%s\n' \
 	"# This file is automatically written by the build scripts, and read using Gradle" \
 	"ndkVersion=$v_ndk_n" "ndkRoot=$ANDROID_NDK_ROOT" >ndk.properties

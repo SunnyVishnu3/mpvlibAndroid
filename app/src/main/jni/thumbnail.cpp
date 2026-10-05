@@ -49,7 +49,9 @@ static inline mpv_node make_node_str(const char *s)
 
 jni_func(jobject, grabThumbnail, jint dimension) {
     auto total_start = std::chrono::high_resolution_clock::now();
-    CHECK_MPV_INIT();
+    std::lock_guard<std::mutex> lock(g_mpv_mutex);
+    if (!check_mpv_initialized())
+        return NULL;
     init_methods_cache(env);
 
     mpv_node result{};
@@ -63,7 +65,7 @@ jni_func(jobject, grabThumbnail, jint dimension) {
         c.format = MPV_FORMAT_NODE_ARRAY;
         c.u.list = &c_array;
         
-        if (mpv_command_node(g_mpv, &c, &result) < 0) {
+        if (mpv_command_node(g_mpv.load(), &c, &result) < 0) {
             ALOGE("Thumbnail (MPV) | Screenshot failed");
             return NULL;
         }

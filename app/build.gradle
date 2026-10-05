@@ -21,6 +21,7 @@ android {
             props.load(new FileInputStream(propfile))
         ndkVersion = props.getProperty('ndkVersion', '')
         ndkPath = props.getProperty('ndkRoot', '')
+        consumerProguardFiles 'consumer-rules.pro'
     }
 
     buildFeatures {
