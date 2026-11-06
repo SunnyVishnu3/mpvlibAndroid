@@ -46,10 +46,6 @@ if ! git apply --reverse --check ../../patches/mpv_android_fdsan_fork.patch 2>/d
 	git apply ../../patches/mpv_android_fdsan_fork.patch
 fi
 
-if ! git apply --reverse --check ../../patches/mpv_lsfg_layer.patch 2>/dev/null; then
-	git apply ../../patches/mpv_lsfg_layer.patch
-fi
-
 if ! git apply --reverse --check ../../patches/mpv_adrenotools_custom_driver.patch 2>/dev/null; then
 	git apply ../../patches/mpv_adrenotools_custom_driver.patch
 fi
@@ -97,11 +93,11 @@ fi
 
 ninja -C "$build" -j"$cores"
 
-if readelf --wide --dyn-syms "$build/libmpv.so" | grep -Eq '[[:space:]]clone@LIBC([[:space:]]|$)'; then
+if readelf --wide --dyn-syms "$build/libmpv.so" | grep -E '[[:space:]]clone@LIBC([[:space:]]|$)' >/dev/null; then
 	echo "Android libmpv still imports clone@LIBC; refusing to package it." >&2
 	exit 1
 fi
-if ! readelf --wide --dyn-syms "$build/libmpv.so" | grep -Eq '[[:space:]]fork@LIBC([[:space:]]|$)'; then
+if ! (readelf --wide --dyn-syms "$build/libmpv.so" | grep -E '[[:space:]]fork@LIBC([[:space:]]|$)' >/dev/null); then
 	echo "Android libmpv does not import fork@LIBC; subprocess fallback is missing." >&2
 	exit 1
 fi

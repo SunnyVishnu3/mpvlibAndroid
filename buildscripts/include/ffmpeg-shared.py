@@ -140,6 +140,9 @@ def verify_package(directory, tool):
         raise ValueError(f"Unsupported native package ABI: {directory.name}")
     elf_class, machine = abis[directory.name]
     expected = {"libffmpeg.so", "libmpv.so", "libplayer.so", "libc++_shared.so"}
+    adrenotools_libs = {"libadrenotools.so", "libfile_redirect_hook.so", "libgsl_alloc_hook.so", "libhook_impl.so", "libmain_hook.so"}
+    if directory.name == "arm64-v8a" and any(path.name in adrenotools_libs for path in directory.glob("*.so")):
+        expected.update(adrenotools_libs)
     actual = {path.name for path in directory.glob("*.so")}
     if actual != expected:
         raise ValueError(f"Unexpected native package in {directory}: "
