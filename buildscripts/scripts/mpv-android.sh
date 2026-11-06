@@ -37,6 +37,14 @@ fi
 PREFIX32="$prefix32" PREFIX64="$prefix64" PREFIX_X64="$prefix_x64" PREFIX_X86="$prefix_x86" \
 ndk-build -C app/src/main -j$cores
 
+if [ -d "app/src/main/libs/arm64-v8a" ] && [ -n "$prefix64" ]; then
+	for hook in libmain_hook.so libhook_impl.so libfile_redirect_hook.so libadrenotools.so; do
+		if [ -f "$prefix64/lib/$hook" ]; then
+			cp -f "$prefix64/lib/$hook" "app/src/main/libs/arm64-v8a/"
+		fi
+	done
+fi
+
 for abi in armeabi-v7a arm64-v8a x86_64 x86; do
 	if [ -d "app/src/main/libs/$abi" ]; then
 		python3 "$BUILD/include/ffmpeg-shared.py" verify-package "app/src/main/libs/$abi"

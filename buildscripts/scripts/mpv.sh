@@ -50,6 +50,10 @@ if ! git apply --reverse --check ../../patches/mpv_lsfg_layer.patch 2>/dev/null;
 	git apply ../../patches/mpv_lsfg_layer.patch
 fi
 
+if ! git apply --reverse --check ../../patches/mpv_adrenotools_custom_driver.patch 2>/dev/null; then
+	git apply ../../patches/mpv_adrenotools_custom_driver.patch
+fi
+
 unset CC CXX # meson wants these unset
 
 check_iconv_files

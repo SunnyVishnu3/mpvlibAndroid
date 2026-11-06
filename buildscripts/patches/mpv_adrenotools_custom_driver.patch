@@ -1,0 +1,43 @@
+diff --git a/video/out/vulkan/context_android.c b/video/out/vulkan/context_android.c
+index 8e45f12..d3a9b1c 100644
+--- a/video/out/vulkan/context_android.c
++++ b/video/out/vulkan/context_android.c
+@@ -46,3 +46,8 @@ static VkSurfaceKHR android_create_surface(struct ra_ctx *ctx,
+     VkSurfaceKHR surface = VK_NULL_HANDLE;
+-    VkResult res = vkCreateAndroidSurfaceKHR(vk->vkinst->instance, &info,
+-                                             NULL, &surface);
++    PFN_vkCreateAndroidSurfaceKHR pfnCreateSurface = (PFN_vkCreateAndroidSurfaceKHR)
++        vk->vkinst->get_proc_addr(vk->vkinst->instance, "vkCreateAndroidSurfaceKHR");
++    if (!pfnCreateSurface) {
++        MP_MSG(ctx, msgl, "vkCreateAndroidSurfaceKHR not found in instance\n");
++        return VK_NULL_HANDLE;
++    }
++    VkResult res = pfnCreateSurface(vk->vkinst->instance, &info, NULL, &surface);
+@@ -155,3 +160,5 @@ static bool android_update_window(struct ra_ctx *ctx)
+     if (!ra_vk_ctx_replace_surface(ctx, surface, VK_PRESENT_MODE_FIFO_KHR)) {
+-        vkDestroySurfaceKHR(vk->vkinst->instance, surface, NULL);
++        PFN_vkDestroySurfaceKHR pfnDestroy = (PFN_vkDestroySurfaceKHR)
++            vk->vkinst->get_proc_addr(vk->vkinst->instance, "vkDestroySurfaceKHR");
++        if (pfnDestroy)
++            pfnDestroy(vk->vkinst->instance, surface, NULL);
+         goto fail;
+diff --git a/video/out/vulkan/utils.c b/video/out/vulkan/utils.c
+index d8b695f..f9a2e31 100644
+--- a/video/out/vulkan/utils.c
++++ b/video/out/vulkan/utils.c
+@@ -3,2 +3,4 @@
+ #include "utils.h"
++
++__attribute__((weak)) PFN_vkGetInstanceProcAddr get_adrenotools_vk_proc_addr(void);
+ 
+@@ -14,2 +16,6 @@ bool mpvk_init(struct mpvk_ctx *vk, struct ra_ctx *ctx, const char *surface_ext
+ 
++    PFN_vkGetInstanceProcAddr custom_get_proc_addr = NULL;
++    if (get_adrenotools_vk_proc_addr)
++        custom_get_proc_addr = get_adrenotools_vk_proc_addr();
++
+     mppl_log_set_probing(vk->pllog, true);
+     vk->vkinst = pl_vk_inst_create(vk->pllog, &(struct pl_vk_inst_params) {
++        .get_proc_addr = custom_get_proc_addr,
+         .debug = ctx->opts.debug,
+

@@ -40,8 +40,9 @@ LOCAL_SRC_FILES := \
 	property.cpp \
 	event.cpp \
 	node.cpp \
-	thumbnail.cpp
-LOCAL_LDLIBS    := -llog -latomic -ljnigraphics
+	thumbnail.cpp \
+	gpu_driver.cpp
+LOCAL_LDLIBS    := -llog -latomic -ljnigraphics -ldl
 LOCAL_SHARED_LIBRARIES := ffmpeg mpv
 
 include $(BUILD_SHARED_LIBRARY)
