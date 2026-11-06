@@ -32,6 +32,12 @@ clone_ci_commit() {
 	fi
 }
 
+# adrenotools
+if [ ! -d adrenotools ]; then
+	git clone --recursive https://github.com/eden-emulator/libadrenotools.git adrenotools
+	sed -i 's/target_link_libraries(adrenotools android linkernsbypass)/target_link_libraries(adrenotools android linkernsbypass log)/' adrenotools/CMakeLists.txt
+fi
+
 # mbedtls
 if [ ! -d mbedtls ]; then
 	mkdir mbedtls

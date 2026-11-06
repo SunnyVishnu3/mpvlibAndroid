@@ -38,7 +38,7 @@ PREFIX32="$prefix32" PREFIX64="$prefix64" PREFIX_X64="$prefix_x64" PREFIX_X86="$
 ndk-build -C app/src/main -j$cores
 
 if [ -d "app/src/main/libs/arm64-v8a" ] && [ -n "$prefix64" ]; then
-	for hook in libmain_hook.so libhook_impl.so libfile_redirect_hook.so libadrenotools.so; do
+	for hook in libmain_hook.so libhook_impl.so libfile_redirect_hook.so libgsl_alloc_hook.so libadrenotools.so; do
 		if [ -f "$prefix64/lib/$hook" ]; then
 			cp -f "$prefix64/lib/$hook" "app/src/main/libs/arm64-v8a/"
 		fi

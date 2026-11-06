@@ -167,6 +167,7 @@ jobs:
           [ "$ENABLE_X86_ARCH" = "true" ] && arches+=(x86 x86_64)
           for arch in "${arches[@]}"; do
             ./buildall.sh --arch "$arch" -n mpv
+            [ "$arch" = "arm64" ] && ./buildall.sh --arch "$arch" -n adrenotools
           done
 
           ./buildall.sh -n mpv-android

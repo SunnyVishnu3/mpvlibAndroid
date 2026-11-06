@@ -1,6 +1,7 @@
 #!/bin/bash -e
 
 . ../../include/path.sh
+. ../../include/depinfo.sh
 . ../../include/cmake-android.sh
 
 if [ "$prefix_name" != "arm64" ]; then
@@ -39,7 +40,7 @@ android_cmake_install "$build"
 
 # Copy hooks to prefix_dir/lib so they package into the AAR jniLibs
 mkdir -p "$prefix_dir/lib"
-for hook in libmain_hook.so libhook_impl.so libfile_redirect_hook.so libadrenotools.so; do
+for hook in libmain_hook.so libhook_impl.so libfile_redirect_hook.so libgsl_alloc_hook.so libadrenotools.so; do
 	find "$build" -name "$hook" -exec cp -f {} "$prefix_dir/lib/" \;
 done
 
