@@ -14,7 +14,7 @@ if [ "$os" == "linux" ]; then
 							cmake patch ant unzip wget meson python3 gperf nasm \
 							glibc-devel.i686 libgcc.i686
 		elif apt-get -v &>/dev/null; then
-			sudo apt-get install autoconf pkg-config libtool ninja-build \
+			sudo apt-get install -y autoconf pkg-config libtool ninja-build \
 							cmake patch ant unzip wget meson python3 gperf nasm \
 							gcc-multilib libc6-dev-i386
 			sudo pip3 install --break-system-packages meson
@@ -28,7 +28,7 @@ if [ "$os" == "linux" ]; then
 		hash yum &>/dev/null && \
 			echo "Install it using e.g. sudo yum install java-latest-openjdk-devel"
 		apt-get -v &>/dev/null && \
-			echo "Install it using e.g. sudo apt-get install default-jre-headless"
+			echo "Install it using e.g. sudo apt-get install -y default-jre-headless"
 		exit 255
 	fi
 
