@@ -34,20 +34,37 @@ extern "C" {
 
 jni_func(jboolean, setCustomGpuDriver, jstring hookLibDir, jstring customDriverDir, jstring customDriverName, jstring fileRedirectDir) {
 #if defined(__aarch64__)
+    if (!customDriverName || !customDriverDir || !hookLibDir) {
+        ALOGI("setCustomGpuDriver: clearing custom driver hook (reverting to system default)");
+        g_custom_vkGetInstanceProcAddr = nullptr;
+        g_adrenotools_handle = nullptr;
+        return JNI_TRUE;
+    }
+
     std::string hook_dir, driver_dir, driver_name, redirect_dir;
     if (!jstring_to_utf8(env, hookLibDir, &hook_dir)) {
         ALOGE("setCustomGpuDriver: failed to get hookLibDir");
         return JNI_FALSE;
     }
-    if (customDriverDir) jstring_to_utf8(env, customDriverDir, &driver_dir);
-    if (customDriverName) jstring_to_utf8(env, customDriverName, &driver_name);
+    jstring_to_utf8(env, customDriverDir, &driver_dir);
+    jstring_to_utf8(env, customDriverName, &driver_name);
     if (fileRedirectDir) jstring_to_utf8(env, fileRedirectDir, &redirect_dir);
 
+    if (driver_name.empty() || driver_dir.empty()) {
+        ALOGI("setCustomGpuDriver: empty driver name or dir, reverting to system default");
+        g_custom_vkGetInstanceProcAddr = nullptr;
+        g_adrenotools_handle = nullptr;
+        return JNI_TRUE;
+    }
+
+    // Ensure trailing slashes
+    if (!driver_dir.empty() && driver_dir.back() != '/')
+        driver_dir += '/';
+    if (!hook_dir.empty() && hook_dir.back() != '/')
+        hook_dir += '/';
+
     // Dynamically load libadrenotools.so from the app's nativeLibraryDir
-    std::string adrenotools_path = hook_dir;
-    if (!adrenotools_path.empty() && adrenotools_path.back() != '/')
-        adrenotools_path += '/';
-    adrenotools_path += "libadrenotools.so";
+    std::string adrenotools_path = hook_dir + "libadrenotools.so";
 
     void *adrenotools_lib = dlopen(adrenotools_path.c_str(), RTLD_NOW);
     if (!adrenotools_lib) {
@@ -66,39 +83,24 @@ jni_func(jboolean, setCustomGpuDriver, jstring hookLibDir, jstring customDriverD
         return JNI_FALSE;
     }
 
-    int featureFlags = 0;
+    int featureFlags = ADRENOTOOLS_DRIVER_CUSTOM;
     const char *redirect_dir_ptr = nullptr;
     if (!redirect_dir.empty()) {
         featureFlags |= ADRENOTOOLS_DRIVER_FILE_REDIRECT;
         redirect_dir_ptr = redirect_dir.c_str();
     }
 
-    if (!driver_name.empty() && !driver_dir.empty()) {
-        featureFlags |= ADRENOTOOLS_DRIVER_CUSTOM;
-        ALOGI("setCustomGpuDriver: loading custom GPU driver %s from %s", driver_name.c_str(), driver_dir.c_str());
-        g_adrenotools_handle = open_libvulkan(
-            RTLD_NOW,
-            featureFlags,
-            nullptr,
-            hook_dir.c_str(),
-            driver_dir.c_str(),
-            driver_name.c_str(),
-            redirect_dir_ptr,
-            nullptr
-        );
-    } else {
-        ALOGI("setCustomGpuDriver: loading default driver via adrenotools");
-        g_adrenotools_handle = open_libvulkan(
-            RTLD_NOW,
-            featureFlags,
-            nullptr,
-            hook_dir.c_str(),
-            nullptr,
-            nullptr,
-            redirect_dir_ptr,
-            nullptr
-        );
-    }
+    ALOGI("setCustomGpuDriver: loading custom GPU driver %s from %s", driver_name.c_str(), driver_dir.c_str());
+    g_adrenotools_handle = open_libvulkan(
+        RTLD_NOW,
+        featureFlags,
+        nullptr,
+        hook_dir.c_str(),
+        driver_dir.c_str(),
+        driver_name.c_str(),
+        redirect_dir_ptr,
+        nullptr
+    );
 
     if (!g_adrenotools_handle) {
         ALOGE("setCustomGpuDriver: adrenotools_open_libvulkan failed");
@@ -145,4 +147,3 @@ PFN_vkGetInstanceProcAddr get_adrenotools_vk_proc_addr(void) {
 }
 
 }
-

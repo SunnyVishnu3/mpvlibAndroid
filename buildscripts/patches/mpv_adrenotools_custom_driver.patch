@@ -1,3 +1,22 @@
+diff --git a/video/out/vulkan/context.c b/video/out/vulkan/context.c
+index 26194a83c1..f9fbd4124d 100644
+--- a/video/out/vulkan/context.c
++++ b/video/out/vulkan/context.c
+@@ -176,8 +176,12 @@ static void ra_vk_ctx_destroy_surface(struct mpvk_ctx *vk)
+ {
+     if (vk->swapchain)
+         pl_swapchain_destroy(&vk->swapchain);
+-    if (vk->surface != VK_NULL_HANDLE)
+-        vkDestroySurfaceKHR(vk->vkinst->instance, vk->surface, NULL);
++    if (vk->surface != VK_NULL_HANDLE) {
++        PFN_vkDestroySurfaceKHR pfnDestroy = (PFN_vkDestroySurfaceKHR)
++            vk->vkinst->get_proc_addr(vk->vkinst->instance, "vkDestroySurfaceKHR");
++        if (pfnDestroy)
++            pfnDestroy(vk->vkinst->instance, vk->surface, NULL);
++    }
+     vk->surface = VK_NULL_HANDLE;
+ }
+ 
 diff --git a/video/out/vulkan/context_android.c b/video/out/vulkan/context_android.c
 index 04cffba9f8..2899a92243 100644
 --- a/video/out/vulkan/context_android.c
