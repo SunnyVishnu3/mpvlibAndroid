@@ -27,8 +27,30 @@ typedef bool (*fn_adrenotools_set_freedreno_env)(
     const char *value
 );
 
+typedef void (*fn_mpv_android_set_custom_vk_proc_addr)(PFN_vkGetInstanceProcAddr);
+
 static void *g_adrenotools_handle = nullptr;
 static PFN_vkGetInstanceProcAddr g_custom_vkGetInstanceProcAddr = nullptr;
+
+static void notify_libmpv_custom_vk_proc_addr(PFN_vkGetInstanceProcAddr proc) {
+    auto set_custom_proc = reinterpret_cast<fn_mpv_android_set_custom_vk_proc_addr>(
+        dlsym(RTLD_DEFAULT, "mpv_android_set_custom_vk_proc_addr")
+    );
+    if (!set_custom_proc) {
+        void *mpv_lib = dlopen("libmpv.so", RTLD_NOLOAD);
+        if (mpv_lib) {
+            set_custom_proc = reinterpret_cast<fn_mpv_android_set_custom_vk_proc_addr>(
+                dlsym(mpv_lib, "mpv_android_set_custom_vk_proc_addr")
+            );
+        }
+    }
+    if (set_custom_proc) {
+        set_custom_proc(proc);
+        ALOGI("setCustomGpuDriver: updated libmpv custom Vulkan proc addr to %p", proc);
+    } else {
+        ALOGW("setCustomGpuDriver: mpv_android_set_custom_vk_proc_addr symbol not found in libmpv.so");
+    }
+}
 
 extern "C" {
 
@@ -38,6 +60,7 @@ jni_func(jboolean, setCustomGpuDriver, jstring hookLibDir, jstring customDriverD
         ALOGI("setCustomGpuDriver: clearing custom driver hook (reverting to system default)");
         g_custom_vkGetInstanceProcAddr = nullptr;
         g_adrenotools_handle = nullptr;
+        notify_libmpv_custom_vk_proc_addr(nullptr);
         return JNI_TRUE;
     }
 
@@ -54,6 +77,7 @@ jni_func(jboolean, setCustomGpuDriver, jstring hookLibDir, jstring customDriverD
         ALOGI("setCustomGpuDriver: empty driver name or dir, reverting to system default");
         g_custom_vkGetInstanceProcAddr = nullptr;
         g_adrenotools_handle = nullptr;
+        notify_libmpv_custom_vk_proc_addr(nullptr);
         return JNI_TRUE;
     }
 
@@ -73,6 +97,7 @@ jni_func(jboolean, setCustomGpuDriver, jstring hookLibDir, jstring customDriverD
     }
     if (!adrenotools_lib) {
         ALOGW("setCustomGpuDriver: libadrenotools.so not loaded: %s", dlerror());
+        notify_libmpv_custom_vk_proc_addr(nullptr);
         return JNI_FALSE;
     }
 
@@ -80,6 +105,7 @@ jni_func(jboolean, setCustomGpuDriver, jstring hookLibDir, jstring customDriverD
         dlsym(adrenotools_lib, "adrenotools_open_libvulkan"));
     if (!open_libvulkan) {
         ALOGE("setCustomGpuDriver: adrenotools_open_libvulkan symbol not found");
+        notify_libmpv_custom_vk_proc_addr(nullptr);
         return JNI_FALSE;
     }
 
@@ -104,6 +130,7 @@ jni_func(jboolean, setCustomGpuDriver, jstring hookLibDir, jstring customDriverD
 
     if (!g_adrenotools_handle) {
         ALOGE("setCustomGpuDriver: adrenotools_open_libvulkan failed");
+        notify_libmpv_custom_vk_proc_addr(nullptr);
         return JNI_FALSE;
     }
 
@@ -112,9 +139,11 @@ jni_func(jboolean, setCustomGpuDriver, jstring hookLibDir, jstring customDriverD
 
     if (!g_custom_vkGetInstanceProcAddr) {
         ALOGE("setCustomGpuDriver: failed to find vkGetInstanceProcAddr in hooked libvulkan");
+        notify_libmpv_custom_vk_proc_addr(nullptr);
         return JNI_FALSE;
     }
 
+    notify_libmpv_custom_vk_proc_addr(g_custom_vkGetInstanceProcAddr);
     ALOGI("setCustomGpuDriver: custom Vulkan loader hook successfully initialized!");
     return JNI_TRUE;
 #else
@@ -142,6 +171,7 @@ jni_func(jboolean, setFreedrenoEnv, jstring name, jstring value) {
 #endif
 }
 
+__attribute__((visibility("default")))
 PFN_vkGetInstanceProcAddr get_adrenotools_vk_proc_addr(void) {
     return g_custom_vkGetInstanceProcAddr;
 }

@@ -50,25 +50,63 @@ index 04cffba9f8..2899a92243 100644
      }
  
 diff --git a/video/out/vulkan/utils.c b/video/out/vulkan/utils.c
-index c535291b1e..246f8f29cd 100644
+index c535291b1e..017d9f330c 100644
 --- a/video/out/vulkan/utils.c
 +++ b/video/out/vulkan/utils.c
-@@ -1,6 +1,8 @@
+@@ -1,6 +1,25 @@
  #include "video/out/placebo/utils.h"
  #include "utils.h"
  
++#if defined(__ANDROID__)
++#include <dlfcn.h>
++static PFN_vkGetInstanceProcAddr s_custom_vkGetInstanceProcAddr = NULL;
++
++__attribute__((visibility("default")))
++void mpv_android_set_custom_vk_proc_addr(PFN_vkGetInstanceProcAddr proc)
++{
++    s_custom_vkGetInstanceProcAddr = proc;
++}
++
++__attribute__((visibility("default")))
++PFN_vkGetInstanceProcAddr mpv_android_get_custom_vk_proc_addr(void)
++{
++    return s_custom_vkGetInstanceProcAddr;
++}
++#endif
++
 +__attribute__((weak)) PFN_vkGetInstanceProcAddr get_adrenotools_vk_proc_addr(void);
 +
  bool mpvk_init(struct mpvk_ctx *vk, struct ra_ctx *ctx, const char *surface_ext)
  {
      vk->pllog = mppl_log_create(ctx, ctx->vo->log);
-@@ -12,8 +14,13 @@ bool mpvk_init(struct mpvk_ctx *vk, struct ra_ctx *ctx, const char *surface_ext)
+@@ -12,8 +31,34 @@ bool mpvk_init(struct mpvk_ctx *vk, struct ra_ctx *ctx, const char *surface_ext)
          surface_ext,
      };
  
 +    PFN_vkGetInstanceProcAddr custom_get_proc_addr = NULL;
++#if defined(__ANDROID__)
++    custom_get_proc_addr = s_custom_vkGetInstanceProcAddr;
++    if (!custom_get_proc_addr) {
++        typedef PFN_vkGetInstanceProcAddr (*fn_get_adrenotools_vk_proc_addr)(void);
++        fn_get_adrenotools_vk_proc_addr fn = (fn_get_adrenotools_vk_proc_addr)dlsym(RTLD_DEFAULT, "get_adrenotools_vk_proc_addr");
++        if (!fn) {
++            void *player_lib = dlopen("libplayer.so", RTLD_NOLOAD);
++            if (player_lib) {
++                fn = (fn_get_adrenotools_vk_proc_addr)dlsym(player_lib, "get_adrenotools_vk_proc_addr");
++            }
++        }
++        if (fn)
++            custom_get_proc_addr = fn();
++    }
++    if (custom_get_proc_addr) {
++        MP_MSG(ctx, MSGL_INFO, "AdrenoTools custom Vulkan resolver active: %p\n", custom_get_proc_addr);
++    } else {
++        MP_MSG(ctx, MSGL_INFO, "No custom Vulkan resolver active; using system Vulkan loader\n");
++    }
++#else
 +    if (get_adrenotools_vk_proc_addr)
 +        custom_get_proc_addr = get_adrenotools_vk_proc_addr();
++#endif
 +
      mppl_log_set_probing(vk->pllog, true);
      vk->vkinst = pl_vk_inst_create(vk->pllog, &(struct pl_vk_inst_params) {

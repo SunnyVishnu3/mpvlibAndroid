@@ -38,7 +38,9 @@ object MPVLib {
     @JvmStatic
     fun openStream(uri: String): Stream? = streams[uri]?.invoke()
 
+    @JvmStatic
     external fun setCustomGpuDriver(hookLibDir: String, customDriverDir: String?, customDriverName: String?, fileRedirectDir: String?): Boolean
+    @JvmStatic
     external fun setFreedrenoEnv(name: String, value: String): Boolean
     external fun create(appctx: Context)
     external fun init()
